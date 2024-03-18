@@ -33,7 +33,7 @@ func main() {
 		panic(err)
 	}
 
-	log.Printf("start task %v", taskId)
+	log.Printf("start task: %v, backup path: %v", taskId, Config.BackPath)
 
 	c.Run()
 }
