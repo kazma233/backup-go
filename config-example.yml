@@ -1,0 +1,6 @@
+oss:
+  bucket_name: 'bucket_name'
+  endpoint: 'endpoint'
+  access_key: 'access_key'
+  access_key_secret: 'access_key_secret'
+back_path: 'xxxx/path'
