@@ -10,7 +10,7 @@ type (
 	// GlobalConfig base config
 	GlobalConfig struct {
 		OSS      OssConfig `yaml:"oss"`
-		BackPath string    `yaml:"backPath"`
+		BackPath string    `yaml:"back_path"`
 	}
 
 	OssConfig struct {
