@@ -9,8 +9,10 @@ import (
 type (
 	// GlobalConfig base config
 	GlobalConfig struct {
-		OSS      OssConfig `yaml:"oss"`
-		BackPath string    `yaml:"back_path"`
+		OSS        OssConfig  `yaml:"oss"`
+		Mail       MailConfig `yaml:"mail"`
+		BackPath   string     `yaml:"back_path"`
+		NoticeMail string     `yaml:"notice_mail"`
 	}
 
 	OssConfig struct {
@@ -18,6 +20,14 @@ type (
 		AccessKey       string `yaml:"access_key"`
 		AccessKeySecret string `yaml:"access_key_secret"`
 		Endpoint        string `yaml:"endpoint"`
+	}
+
+	// MailConfig mail config
+	MailConfig struct {
+		Smtp     string `yaml:"smtp"`
+		Port     int    `yaml:"port"`
+		User     string `yaml:"user"`
+		Password string `yaml:"password"`
 	}
 )
 

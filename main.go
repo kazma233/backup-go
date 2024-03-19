@@ -25,10 +25,7 @@ func main() {
 	)
 	c := cron.New(cron.WithParser(secondParser), cron.WithChain())
 
-	taskId, err := c.AddFunc("0 0 20 * * ?", func() {
-		backup(Config.BackPath)
-		cleanOld()
-	})
+	taskId, err := c.AddFunc("0 20 0 * * ? ", backupTask)
 	if err != nil {
 		panic(err)
 	}
@@ -36,6 +33,28 @@ func main() {
 	log.Printf("start task: %v, backup path: %v", taskId, Config.BackPath)
 
 	c.Run()
+}
+
+func backupTask() {
+	defer func() {
+		if anyData := recover(); anyData != nil {
+			log.Printf("[WARN] exec backupTask has panic %v", anyData)
+		}
+	}()
+
+	path := Config.BackPath
+	backup(path)
+	cleanOld()
+	notice(path)
+}
+
+func notice(path string) {
+	mail := Config.Mail
+	sender := NewMailSender(mail.Smtp, mail.Port, mail.User, mail.Password)
+	err := sender.SendEmail(mail.User, Config.NoticeMail, "备份通知", path+"已备份完成")
+	if err != nil {
+		panic(err)
+	}
 }
 
 func cleanOld() {
