@@ -7,6 +7,7 @@ import (
 	"github.com/robfig/cron/v3"
 	"io"
 	"log"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -23,7 +24,8 @@ func main() {
 			cron.DowOptional |
 			cron.Descriptor,
 	)
-	c := cron.New(cron.WithParser(secondParser), cron.WithChain())
+	nyc, _ := time.LoadLocation("Asia/Shanghai")
+	c := cron.New(cron.WithParser(secondParser), cron.WithChain(), cron.WithLocation(nyc))
 
 	taskId, err := c.AddFunc("0 20 0 * * ? ", backupTask)
 	if err != nil {
@@ -32,7 +34,12 @@ func main() {
 
 	log.Printf("start task: %v, backup path: %v", taskId, Config.BackPath)
 
-	c.Run()
+	c.Start()
+
+	http.HandleFunc("/", func(resp http.ResponseWriter, req *http.Request) {
+		backupTask()
+	})
+	log.Println(http.ListenAndServe(":7000", nil))
 }
 
 func backupTask() {
