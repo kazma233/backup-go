@@ -58,7 +58,7 @@ func backupTask() {
 func notice(path string) {
 	mail := Config.Mail
 	sender := NewMailSender(mail.Smtp, mail.Port, mail.User, mail.Password)
-	err := sender.SendEmail(mail.User, Config.NoticeMail, "备份通知", path+"已备份完成")
+	err := sender.SendEmail("backup-go", Config.NoticeMail, "备份通知", path+"已备份完成")
 	if err != nil {
 		panic(err)
 	}
@@ -140,7 +140,7 @@ func zipPath(source string) (string, error) {
 	}
 	baseDir := filepath.Base(source)
 
-	target := time.Now().Format("2006_01_02_15_04") + baseDir + ".zip"
+	target := time.Now().Format("2006_01_02_15_04_") + baseDir + ".zip"
 	zipfile, err := os.Create(target)
 	if err != nil {
 		panic(err)
