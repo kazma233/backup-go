@@ -3,6 +3,7 @@ package main
 import (
 	"archive/zip"
 	"errors"
+	"fmt"
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
 	"github.com/robfig/cron/v3"
 	"io"
@@ -58,7 +59,10 @@ func backupTask() {
 func notice(path string) {
 	mail := Config.Mail
 	sender := NewMailSender(mail.Smtp, mail.Port, mail.User, mail.Password)
-	err := sender.SendEmail("backup-go", Config.NoticeMail, "备份通知", path+"已备份完成")
+
+	hostname, _ := os.Hostname()
+	content := fmt.Sprintf(`【%s】：%s目录已备份完成`, hostname, path)
+	err := sender.SendEmail("backup-go", Config.NoticeMail, "备份通知", content)
 	if err != nil {
 		panic(err)
 	}
@@ -102,6 +106,7 @@ func backup(path string) {
 		panic(err)
 	}
 	log.Printf("zip path %s to %s done", path, zipFile)
+	defer os.Remove(zipFile)
 
 	client, err := oss.New(Config.OSS.Endpoint, Config.OSS.AccessKey, Config.OSS.AccessKeySecret)
 	if err != nil {
