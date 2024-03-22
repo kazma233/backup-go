@@ -25,8 +25,7 @@ func main() {
 			cron.DowOptional |
 			cron.Descriptor,
 	)
-	nyc, _ := time.LoadLocation("Asia/Shanghai")
-	c := cron.New(cron.WithParser(secondParser), cron.WithChain(), cron.WithLocation(nyc))
+	c := cron.New(cron.WithParser(secondParser), cron.WithChain())
 
 	taskId, err := c.AddFunc("0 20 0 * * ? ", backupTask)
 	if err != nil {
