@@ -15,6 +15,15 @@ import (
 	"time"
 )
 
+type (
+	MessageType string
+)
+
+var (
+	START MessageType = "备份开始"
+	DONE  MessageType = "备份结束"
+)
+
 func main() {
 	secondParser := cron.NewParser(
 		cron.Second |
@@ -50,17 +59,19 @@ func backupTask() {
 	}()
 
 	path := Config.BackPath
+	notice(path, START)
 	backup(path)
 	cleanOld()
-	notice(path)
+	notice(path, DONE)
 }
 
-func notice(path string) {
+func notice(path string, mt MessageType) {
+	log.Println(fmt.Sprintf("notice start %v", mt))
 	mail := Config.Mail
 	sender := NewMailSender(mail.Smtp, mail.Port, mail.User, mail.Password)
 
 	hostname, _ := os.Hostname()
-	content := fmt.Sprintf(`【%s】：%s目录已备份完成`, hostname, path)
+	content := fmt.Sprintf(`【%s】：%s目录：%s`, hostname, path, mt)
 	err := sender.SendEmail("backup-go", Config.NoticeMail, "备份通知", content)
 	if err != nil {
 		panic(err)
@@ -68,6 +79,7 @@ func notice(path string) {
 }
 
 func cleanOld() {
+	log.Println(fmt.Sprintf("cleanOld start"))
 	client, err := oss.New(Config.OSS.Endpoint, Config.OSS.AccessKey, Config.OSS.AccessKeySecret)
 	if err != nil {
 		panic(err)
