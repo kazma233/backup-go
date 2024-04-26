@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -90,17 +91,56 @@ func cleanOld() {
 		panic(err)
 	}
 
-	objects, err := bucket.ListObjectsV2(oss.Prefix(time.Now().AddDate(0, 0, -7).Format("2006_01_02")))
-	if err != nil {
-		panic(err)
+	beforeDate := time.Now().AddDate(0, 0, -7)
+	beforeYear, beforeMonth, beforeMonthOfDay := beforeDate.Year(), int(beforeDate.Month()), beforeDate.Day()
+
+	var objects []oss.ObjectProperties
+	token := ""
+	for {
+		resp, err := bucket.ListObjectsV2(oss.MaxKeys(100), oss.ContinuationToken(token))
+		if err != nil {
+			break
+		}
+
+		for _, object := range resp.Objects {
+			sp := strings.Split(object.Key, "_")
+			if len(sp) < 6 {
+				continue
+			}
+			year, err := strconv.Atoi(sp[0])
+			if err != nil {
+				continue
+			}
+			month, err := strconv.Atoi(sp[1])
+			if err != nil {
+				continue
+			}
+			day, err := strconv.Atoi(sp[2])
+			if err != nil {
+				continue
+			}
+
+			if year < beforeYear {
+				objects = append(objects, object)
+			} else if year == beforeYear && month < beforeMonth {
+				objects = append(objects, object)
+			} else if year == beforeYear && month == beforeMonth && day < beforeMonthOfDay {
+				objects = append(objects, object)
+			}
+		}
+		if resp.IsTruncated {
+			token = resp.NextContinuationToken
+		} else {
+			break
+		}
 	}
 
-	if objects.Objects == nil || len(objects.Objects) < 0 {
+	if objects == nil || len(objects) < 0 {
 		return
 	}
 
 	var keys []string
-	for _, k := range objects.Objects {
+	for _, k := range objects {
 		keys = append(keys, k.Key)
 	}
 	deleteObjects, err := bucket.DeleteObjects(keys)
