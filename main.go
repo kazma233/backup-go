@@ -119,7 +119,12 @@ func backup(path string) {
 	log.Printf("zip path %s to %s done", path, zipFile)
 	defer os.Remove(zipFile)
 
-	client, err := oss.New(Config.OSS.Endpoint, Config.OSS.AccessKey, Config.OSS.AccessKeySecret)
+	client, err := oss.New(
+		Config.OSS.Endpoint,
+		Config.OSS.AccessKey,
+		Config.OSS.AccessKeySecret,
+		oss.Timeout(10, 60*60*3),
+	)
 	if err != nil {
 		panic(err)
 	}
