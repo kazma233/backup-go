@@ -20,6 +20,7 @@ type (
 		AccessKey       string `yaml:"access_key"`
 		AccessKeySecret string `yaml:"access_key_secret"`
 		Endpoint        string `yaml:"endpoint"`
+		FastEndpoint    string `yaml:"fast_endpoint"`
 	}
 
 	// MailConfig mail config

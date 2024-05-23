@@ -4,8 +4,6 @@ import (
 	"archive/zip"
 	"errors"
 	"fmt"
-	"github.com/aliyun/aliyun-oss-go-sdk/oss"
-	"github.com/robfig/cron/v3"
 	"io"
 	"log"
 	"net/http"
@@ -14,6 +12,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/aliyun/aliyun-oss-go-sdk/oss"
+	"github.com/robfig/cron/v3"
 )
 
 type (
@@ -26,6 +27,8 @@ var (
 )
 
 func main() {
+	InitOSS()
+
 	secondParser := cron.NewParser(
 		cron.Second |
 			cron.Minute |
@@ -67,7 +70,7 @@ func backupTask() {
 }
 
 func notice(path string, mt MessageType) {
-	log.Println(fmt.Sprintf("notice start %v", mt))
+	log.Printf("notice start %v", mt)
 	mail := Config.Mail
 	sender := NewMailSender(mail.Smtp, mail.Port, mail.User, mail.Password)
 
@@ -80,16 +83,7 @@ func notice(path string, mt MessageType) {
 }
 
 func cleanOld() {
-	log.Println(fmt.Sprintf("cleanOld start"))
-	client, err := oss.New(Config.OSS.Endpoint, Config.OSS.AccessKey, Config.OSS.AccessKeySecret)
-	if err != nil {
-		panic(err)
-	}
-
-	bucket, err := client.Bucket(Config.OSS.BucketName)
-	if err != nil {
-		panic(err)
-	}
+	log.Println("cleanOld start")
 
 	beforeDate := time.Now().AddDate(0, 0, -7)
 	beforeYear, beforeMonth, beforeMonthOfDay := beforeDate.Year(), int(beforeDate.Month()), beforeDate.Day()
@@ -97,7 +91,7 @@ func cleanOld() {
 	var objects []oss.ObjectProperties
 	token := ""
 	for {
-		resp, err := bucket.ListObjectsV2(oss.MaxKeys(100), oss.ContinuationToken(token))
+		resp, err := GetSlowClient().ListObjectsV2(oss.MaxKeys(100), oss.ContinuationToken(token))
 		if err != nil {
 			break
 		}
@@ -135,7 +129,7 @@ func cleanOld() {
 		}
 	}
 
-	if objects == nil || len(objects) < 0 {
+	if objects == nil || len(objects) <= 0 {
 		return
 	}
 
@@ -143,7 +137,7 @@ func cleanOld() {
 	for _, k := range objects {
 		keys = append(keys, k.Key)
 	}
-	deleteObjects, err := bucket.DeleteObjects(keys)
+	deleteObjects, err := GetSlowClient().DeleteObjects(keys)
 	if err != nil {
 		panic(err)
 	}
@@ -159,35 +153,16 @@ func backup(path string) {
 	log.Printf("zip path %s to %s done", path, zipFile)
 	defer os.Remove(zipFile)
 
-	client, err := oss.New(
-		Config.OSS.Endpoint,
-		Config.OSS.AccessKey,
-		Config.OSS.AccessKeySecret,
-		oss.Timeout(10, 60*60*3),
-	)
-	if err != nil {
-		panic(err)
-	}
-
-	bucket, err := client.Bucket(Config.OSS.BucketName)
-	if err != nil {
-		panic(err)
-	}
-
 	objKey := filepath.Base(zipFile)
-	err = bucket.PutObjectFromFile(objKey, zipFile)
+	err = Upload(objKey, zipFile)
 	if err != nil {
 		panic(err)
 	}
 
 	log.Printf("obj upload done %s", objKey)
 
-	url, err := bucket.SignURL(objKey, oss.HTTPGet, 60*60*24*7)
-	if err != nil {
-		panic(err)
-	}
-
-	log.Printf("obj temp url is %s", url)
+	url, err := TempVisitLink(objKey)
+	log.Printf("obj temp url is %s error %v", url, err)
 }
 
 func zipPath(source string) (string, error) {

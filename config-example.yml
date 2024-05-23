@@ -1,6 +1,7 @@
 oss:
   bucket_name: 'bucket_name'
   endpoint: 'endpoint'
+  fast_endpoint: 'fast_endpoint'
   access_key: 'access_key'
   access_key_secret: 'access_key_secret'
 mail:
