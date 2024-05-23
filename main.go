@@ -84,8 +84,10 @@ func notice(path string, mt MessageType) {
 
 func sendMessage(message string) {
 	log.Println(message)
-	resp, err := SendMessage(Config.TgKey, Config.TgChatId, message)
-	log.Printf("notice end: reps %v, error %v", resp, err)
+	_, err := SendMessage(Config.TgKey, Config.TgChatId, message)
+	if err != nil {
+		log.Printf("notice has error %v", err)
+	}
 }
 
 func cleanOld() {

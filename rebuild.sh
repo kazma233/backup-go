@@ -27,7 +27,7 @@ go build -o "$PROCESS_NAME"
 echo "Compiled new $PROCESS_NAME binary"
 
 # 删除旧的日志文件(如果存在)
-#rm -f "$LOG_FILE"
+rm -f "$LOG_FILE"
 
 # 启动新的进程,将输出重定向到日志文件
 nohup "./$PROCESS_NAME" >> "$LOG_FILE" 2>&1 &
