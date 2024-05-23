@@ -4,10 +4,6 @@ oss:
   fast_endpoint: 'fast_endpoint'
   access_key: 'access_key'
   access_key_secret: 'access_key_secret'
-mail:
-  smtp: smtp.xxx.com
-  port: 465
-  user: sender@mail.com
-  password: pw
-notice_mail: 'notice_mail@mail.com'
+tg_key: 'tg_key'
+tg_chat_id: 'tg_chat_id'
 back_path: 'xxxx/path'

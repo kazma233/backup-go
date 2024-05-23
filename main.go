@@ -40,12 +40,19 @@ func main() {
 	)
 	c := cron.New(cron.WithParser(secondParser), cron.WithChain())
 
-	taskId, err := c.AddFunc("0 20 0 * * ? ", backupTask)
+	taskId, err := c.AddFunc("0 25 0 * * ?", backupTask)
 	if err != nil {
 		panic(err)
 	}
 
-	log.Printf("start task: %v, backup path: %v", taskId, Config.BackPath)
+	_, err = c.AddFunc("0 0/30 * * * ?", func() {
+		sendMessage(fmt.Sprintf("live check report %v", time.Now()))
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	sendMessage(fmt.Sprintf("start task: %v, backup path: %v", taskId, Config.BackPath))
 
 	c.Start()
 
@@ -58,7 +65,7 @@ func main() {
 func backupTask() {
 	defer func() {
 		if anyData := recover(); anyData != nil {
-			log.Printf("[WARN] exec backupTask has panic %v", anyData)
+			sendMessage(fmt.Sprintf("[WARN] exec backupTask has panic %v", anyData))
 		}
 	}()
 
@@ -70,20 +77,19 @@ func backupTask() {
 }
 
 func notice(path string, mt MessageType) {
-	log.Printf("notice start %v", mt)
-	mail := Config.Mail
-	sender := NewMailSender(mail.Smtp, mail.Port, mail.User, mail.Password)
-
 	hostname, _ := os.Hostname()
-	content := fmt.Sprintf(`【%s】：%s目录：%s`, hostname, path, mt)
-	err := sender.SendEmail("backup-go", Config.NoticeMail, "备份通知", content)
-	if err != nil {
-		panic(err)
-	}
+	message := fmt.Sprintf(`备份通知：【%s】：%s目录：%s`, hostname, path, mt)
+	sendMessage(message)
+}
+
+func sendMessage(message string) {
+	log.Println(message)
+	resp, err := SendMessage(Config.TgKey, Config.TgChatId, message)
+	log.Printf("notice end: reps %v, error %v", resp, err)
 }
 
 func cleanOld() {
-	log.Println("cleanOld start")
+	sendMessage("cleanOld start")
 
 	beforeDate := time.Now().AddDate(0, 0, -7)
 	beforeYear, beforeMonth, beforeMonthOfDay := beforeDate.Year(), int(beforeDate.Month()), beforeDate.Day()
@@ -141,16 +147,19 @@ func cleanOld() {
 	if err != nil {
 		panic(err)
 	}
-	log.Printf("delete result %v", deleteObjects)
+
+	sendMessage(fmt.Sprintf("delete result %v", deleteObjects))
 }
 
 func backup(path string) {
-	log.Printf("start backup %s", path)
+	sendMessage(fmt.Sprintf("start backup %s", path))
+
 	zipFile, err := zipPath(path)
 	if err != nil {
 		panic(err)
 	}
-	log.Printf("zip path %s to %s done", path, zipFile)
+
+	sendMessage(fmt.Sprintf("zip path %s to %s done", path, zipFile))
 	defer os.Remove(zipFile)
 
 	objKey := filepath.Base(zipFile)
@@ -159,10 +168,10 @@ func backup(path string) {
 		panic(err)
 	}
 
-	log.Printf("obj upload done %s", objKey)
+	sendMessage(fmt.Sprintf("obj upload done %s", objKey))
 
 	url, err := TempVisitLink(objKey)
-	log.Printf("obj temp url is %s error %v", url, err)
+	sendMessage(fmt.Sprintf("obj temp url is %s error %v", url, err))
 }
 
 func zipPath(source string) (string, error) {
