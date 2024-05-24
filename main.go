@@ -24,6 +24,8 @@ type (
 var (
 	START MessageType = "备份开始"
 	DONE  MessageType = "备份结束"
+
+	tgBot = NewTgBot(Config.TgKey)
 )
 
 func main() {
@@ -86,7 +88,7 @@ func notice(path string, mt MessageType) {
 
 func sendMessage(message string) {
 	log.Println(message)
-	_, err := SendMessage(Config.TgKey, Config.TgChatId, message)
+	_, err := tgBot.SendMessage(Config.TgChatId, message)
 	if err != nil {
 		log.Printf("notice has error %v", err)
 	}

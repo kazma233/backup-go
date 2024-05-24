@@ -3,6 +3,7 @@ package main
 import "testing"
 
 func TestSendMessage(t *testing.T) {
-	resp, err := SendMessage(Config.TgKey, Config.TgChatId, "test 2")
+	tgBot := NewTgBot(Config.TgKey)
+	resp, err := tgBot.SendMessage(Config.TgChatId, "new")
 	t.Errorf("resp %v, err %v", resp, err)
 }

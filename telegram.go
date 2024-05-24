@@ -10,18 +10,25 @@ import (
 	"time"
 )
 
-var (
-	botFormat  = "https://api.telegram.org/bot%s/%s"
-	httpClient = http.Client{
-		Timeout: 10 * time.Second,
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+type TGBot struct {
+	botApiFormat string
+	httpClient   http.Client
+}
+
+func NewTgBot(tgKey string) TGBot {
+	return TGBot{
+		botApiFormat: "https://api.telegram.org/bot" + tgKey + "/%s",
+		httpClient: http.Client{
+			Timeout: 10 * time.Second,
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			},
 		},
 	}
-)
+}
 
-func SendMessage(tgKey, chatId, message string) (respStr string, err error) {
-	url := fmt.Sprintf(botFormat, tgKey, "sendMessage")
+func (tgBot *TGBot) SendMessage(chatId, message string) (respStr string, err error) {
+	url := fmt.Sprintf(tgBot.botApiFormat, "sendMessage")
 
 	jsonData := map[string]string{"chat_id": chatId, "text": message}
 	jsonValue, err := json.Marshal(jsonData)
@@ -36,7 +43,7 @@ func SendMessage(tgKey, chatId, message string) (respStr string, err error) {
 
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := httpClient.Do(req)
+	resp, err := tgBot.httpClient.Do(req)
 	if err != nil {
 		return
 	}
