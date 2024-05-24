@@ -27,8 +27,6 @@ var (
 )
 
 func main() {
-	InitOSS()
-
 	secondParser := cron.NewParser(
 		cron.Second |
 			cron.Minute |
@@ -40,12 +38,16 @@ func main() {
 	)
 	c := cron.New(cron.WithParser(secondParser), cron.WithChain())
 
-	taskId, err := c.AddFunc("0 25 0 * * ?", backupTask)
+	ossClient := CreateOSSClient()
+
+	taskId, err := c.AddFunc("0 25 0 * * ?", func() {
+		backupTask(ossClient)
+	})
 	if err != nil {
 		panic(err)
 	}
 
-	_, err = c.AddFunc("0 0/30 * * * ?", func() {
+	_, err = c.AddFunc("0 0 0 * * ?", func() {
 		sendMessage(fmt.Sprintf("live check report %v", time.Now()))
 	})
 	if err != nil {
@@ -57,12 +59,12 @@ func main() {
 	c.Start()
 
 	http.HandleFunc("/", func(resp http.ResponseWriter, req *http.Request) {
-		backupTask()
+		backupTask(ossClient)
 	})
 	log.Println(http.ListenAndServe(":7000", nil))
 }
 
-func backupTask() {
+func backupTask(ossClient *OssClient) {
 	defer func() {
 		if anyData := recover(); anyData != nil {
 			sendMessage(fmt.Sprintf("[WARN] exec backupTask has panic %v", anyData))
@@ -71,8 +73,8 @@ func backupTask() {
 
 	path := Config.BackPath
 	notice(path, START)
-	backup(path)
-	cleanOld()
+	backup(path, ossClient)
+	cleanOld(ossClient)
 	notice(path, DONE)
 }
 
@@ -90,7 +92,7 @@ func sendMessage(message string) {
 	}
 }
 
-func cleanOld() {
+func cleanOld(ossClient *OssClient) {
 	sendMessage("cleanOld start")
 
 	beforeDate := time.Now().AddDate(0, 0, -7)
@@ -99,7 +101,7 @@ func cleanOld() {
 	var objects []oss.ObjectProperties
 	token := ""
 	for {
-		resp, err := GetSlowClient().ListObjectsV2(oss.MaxKeys(100), oss.ContinuationToken(token))
+		resp, err := ossClient.GetSlowClient().ListObjectsV2(oss.MaxKeys(100), oss.ContinuationToken(token))
 		if err != nil {
 			break
 		}
@@ -145,7 +147,7 @@ func cleanOld() {
 	for _, k := range objects {
 		keys = append(keys, k.Key)
 	}
-	deleteObjects, err := GetSlowClient().DeleteObjects(keys)
+	deleteObjects, err := ossClient.GetSlowClient().DeleteObjects(keys)
 	if err != nil {
 		panic(err)
 	}
@@ -153,7 +155,7 @@ func cleanOld() {
 	sendMessage(fmt.Sprintf("delete result %v", deleteObjects))
 }
 
-func backup(path string) {
+func backup(path string, ossClient *OssClient) {
 	sendMessage(fmt.Sprintf("start backup %s", path))
 
 	zipFile, err := zipPath(path)
@@ -165,14 +167,16 @@ func backup(path string) {
 	defer os.Remove(zipFile)
 
 	objKey := filepath.Base(zipFile)
-	err = Upload(objKey, zipFile)
+	err = ossClient.Upload(objKey, zipFile, func(message string) {
+		sendMessage(message)
+	})
 	if err != nil {
 		panic(err)
 	}
 
 	sendMessage(fmt.Sprintf("obj upload done %s", objKey))
 
-	url, err := TempVisitLink(objKey)
+	url, err := ossClient.TempVisitLink(objKey)
 	sendMessage(fmt.Sprintf("obj temp url is %s error %v", url, err))
 }
 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"reflect"
 
@@ -13,20 +14,61 @@ type (
 		slowBucket *oss.Bucket
 		fastBucket *oss.Bucket
 	}
+
+	UploadNoticeFunc func(string)
 )
 
-var (
-	ossClient *OssClient
-)
-
-func InitOSS() {
-	// slowBucket must not nil
-	ossClient = &OssClient{
-		slowBucket: must(getBucket(Config.OSS.Endpoint, Config.OSS.AccessKey, Config.OSS.AccessKeySecret, Config.OSS.BucketName)),
-		fastBucket: getBucket(Config.OSS.FastEndpoint, Config.OSS.AccessKey, Config.OSS.AccessKeySecret, Config.OSS.BucketName),
+func CreateOSSClient() *OssClient {
+	ossClient := &OssClient{
+		slowBucket: must(getBucket(
+			Config.OSS.Endpoint,
+			Config.OSS.AccessKey,
+			Config.OSS.AccessKeySecret,
+			Config.OSS.BucketName)), // slowBucket must not nil
+		fastBucket: getBucket(
+			Config.OSS.FastEndpoint,
+			Config.OSS.AccessKey,
+			Config.OSS.AccessKeySecret,
+			Config.OSS.BucketName,
+		),
 	}
 
 	log.Printf("oss client init done: %v", ossClient)
+
+	return ossClient
+}
+
+func (oc *OssClient) Upload(objKey, filePath string, noticeFunc UploadNoticeFunc) (err error) {
+	if oc.slowBucket == nil && oc.fastBucket == nil {
+		return errors.New("client not init")
+	}
+
+	noticeFunc("use slow bucket")
+	err = oc.slowBucket.PutObjectFromFile(objKey, filePath)
+	if err == nil {
+		noticeFunc("use slow bucket upload success")
+		return nil
+	}
+
+	if oc.fastBucket != nil {
+		noticeFunc("use fast bucket")
+		err := oc.fastBucket.PutObjectFromFile(objKey, filePath)
+		if err == nil {
+			noticeFunc("use fast bucket upload success")
+			return nil
+		}
+	}
+
+	noticeFunc(fmt.Sprintf("upload faild %v", err))
+	return
+}
+
+func (oc *OssClient) TempVisitLink(objKey string) (string, error) {
+	return oc.slowBucket.SignURL(objKey, oss.HTTPGet, 60*60*24*7)
+}
+
+func (oc *OssClient) GetSlowClient() *oss.Bucket {
+	return oc.slowBucket
 }
 
 func must[T any](obj T) T {
@@ -68,32 +110,4 @@ func getBucket(endpoint, ak, aks, buckatName string) *oss.Bucket {
 	}
 
 	return bucket
-}
-
-func Upload(objKey, filePath string) (err error) {
-	if ossClient == nil || (ossClient.slowBucket == nil && ossClient.fastBucket == nil) {
-		return errors.New("client not init")
-	}
-
-	err = ossClient.slowBucket.PutObjectFromFile(objKey, filePath)
-	if err == nil {
-		return nil
-	}
-
-	if ossClient.fastBucket != nil {
-		err := ossClient.fastBucket.PutObjectFromFile(objKey, filePath)
-		if err == nil {
-			return nil
-		}
-	}
-
-	return
-}
-
-func TempVisitLink(objKey string) (string, error) {
-	return ossClient.slowBucket.SignURL(objKey, oss.HTTPGet, 60*60*24*7)
-}
-
-func GetSlowClient() *oss.Bucket {
-	return ossClient.slowBucket
 }

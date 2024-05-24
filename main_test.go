@@ -15,9 +15,11 @@ func Test_zipPath(t *testing.T) {
 }
 
 func Test_backup(t *testing.T) {
-	backup(`E:\audio\asmr`)
+	oc := CreateOSSClient()
+	backup(`E:\audio\asmr`, oc)
 }
 
 func Test_cleanOld(t *testing.T) {
-	cleanOld()
+	oc := CreateOSSClient()
+	cleanOld(oc)
 }
