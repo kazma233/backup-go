@@ -25,10 +25,13 @@ var (
 	START MessageType = "备份开始"
 	DONE  MessageType = "备份结束"
 
-	tgBot = NewTgBot(Config.TgKey)
+	tgBot TGBot
 )
 
 func main() {
+	InitConfig()
+	tgBot = NewTgBot(Config.TgKey)
+
 	secondParser := cron.NewParser(
 		cron.Second |
 			cron.Minute |

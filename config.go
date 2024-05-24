@@ -31,7 +31,7 @@ var (
 	Config GlobalConfig
 )
 
-func init() {
+func InitConfig() {
 	var config = GlobalConfig{}
 	err := yaml.Unmarshal(configBlob, &config)
 	if err != nil {
