@@ -88,10 +88,8 @@ func notice(path string, mt MessageType) {
 
 func sendMessage(message string) {
 	log.Println(message)
-	_, err := tgBot.SendMessage(Config.TgChatId, message)
-	if err != nil {
-		log.Printf("notice has error %v", err)
-	}
+	resp, err := tgBot.SendMessage(Config.TgChatId, message)
+	log.Printf("notice resp %s error %v", resp, err)
 }
 
 func cleanOld(ossClient *OssClient) {
