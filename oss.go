@@ -58,9 +58,9 @@ func (oc *OssClient) Upload(objKey, filePath string, noticeFunc UploadNoticeFunc
 		if err == nil {
 			noticeFunc("use fast bucket upload success")
 			return nil
+		} else {
+			noticeFunc(fmt.Sprintf("use fast bucket upload faild: %v", err))
 		}
-	} else {
-		noticeFunc(fmt.Sprintf("use fast bucket upload faild: %v", err))
 	}
 
 	return
