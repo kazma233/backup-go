@@ -23,6 +23,7 @@ else
 fi
 
 # 编译新的二进制文件
+go env -w GOPROXY=https://goproxy.cn,direct
 go build -o "$PROCESS_NAME"
 echo "Compiled new $PROCESS_NAME binary"
 
