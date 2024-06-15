@@ -4,6 +4,13 @@ oss:
   fast_endpoint: 'fast_endpoint'
   access_key: 'access_key'
   access_key_secret: 'access_key_secret'
-tg_key: 'tg_key'
+mail:
+  smtp: 'smtp'
+  port: 'port'
+  user: 'user'
+  password: 'password'
+tg:
+  key: 'key'
+notice_mail: 'notice_mail'
 tg_chat_id: 'tg_chat_id'
 back_path: 'xxxx/path'

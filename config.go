@@ -9,10 +9,12 @@ import (
 type (
 	// GlobalConfig base config
 	GlobalConfig struct {
-		OSS      OssConfig `yaml:"oss"`
-		BackPath string    `yaml:"back_path"`
-		TgKey    string    `yaml:"tg_key"`
-		TgChatId string    `yaml:"tg_chat_id"`
+		OSS        OssConfig   `yaml:"oss"`
+		Mail       *MailConfig `yaml:"mail"`
+		TG         *TGConfig   `yaml:"tg"`
+		BackPath   string      `yaml:"back_path"`
+		TgChatId   string      `yaml:"tg_chat_id"`
+		NoticeMail string      `yaml:"notice_mail"`
 	}
 
 	OssConfig struct {
@@ -21,6 +23,17 @@ type (
 		AccessKeySecret string `yaml:"access_key_secret"`
 		Endpoint        string `yaml:"endpoint"`
 		FastEndpoint    string `yaml:"fast_endpoint"`
+	}
+
+	TGConfig struct {
+		Key string `yaml:"key"`
+	}
+
+	MailConfig struct {
+		Smtp     string `yaml:"smtp"`
+		Port     int    `yaml:"port"`
+		User     string `yaml:"user"`
+		Password string `yaml:"password"`
 	}
 )
 

@@ -25,12 +25,23 @@ var (
 	START MessageType = "备份开始"
 	DONE  MessageType = "备份结束"
 
-	tgBot TGBot
+	tgBot      *TGBot
+	mailSender *MailSender
 )
 
 func main() {
 	InitConfig()
-	tgBot = NewTgBot(Config.TgKey)
+
+	if Config.TG != nil {
+		tb := NewTgBot(Config.TG.Key)
+		tgBot = &tb
+	}
+
+	mailConfig := Config.Mail
+	if mailConfig != nil {
+		ms := NewMailSender(mailConfig.Smtp, mailConfig.Port, mailConfig.User, mailConfig.Password)
+		mailSender = &ms
+	}
 
 	secondParser := cron.NewParser(
 		cron.Second |
@@ -91,8 +102,16 @@ func notice(path string, mt MessageType) {
 
 func sendMessage(message string) {
 	log.Println(message)
-	resp, err := tgBot.SendMessage(Config.TgChatId, message)
-	log.Printf("notice resp %s error %v", resp, err)
+	if tgBot != nil {
+		resp, err := tgBot.SendMessage(Config.TgChatId, message)
+		log.Printf("tg notice resp %s error %v", resp, err)
+	}
+	if mailSender != nil {
+		err := mailSender.SendEmail("backup-go", Config.NoticeMail, "备份消息通知", message)
+		if err != nil {
+			log.Printf("mail notice error %v", err)
+		}
+	}
 }
 
 func cleanOld(ossClient *OssClient) {
