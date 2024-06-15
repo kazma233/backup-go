@@ -56,14 +56,22 @@ func main() {
 
 	ossClient := CreateOSSClient()
 
-	taskId, err := c.AddFunc("0 25 0 * * ?", func() {
+	backupTaskCron := Config.Cron.BackupTask
+	if backupTaskCron == "" {
+		backupTaskCron = "0 25 0 * * ?"
+	}
+	taskId, err := c.AddFunc(backupTaskCron, func() {
 		backupTask(ossClient)
 	})
 	if err != nil {
 		panic(err)
 	}
 
-	_, err = c.AddFunc("0 0 0 * * ?", func() {
+	livenessCron := Config.Cron.Liveness
+	if livenessCron == "" {
+		livenessCron = "0 0 0 * * ?"
+	}
+	_, err = c.AddFunc(livenessCron, func() {
 		sendMessage(fmt.Sprintf("live check report %v", time.Now()))
 	})
 	if err != nil {
@@ -213,7 +221,11 @@ func zipPath(source string) (string, error) {
 	}
 	baseDir := filepath.Base(source)
 
-	target := time.Now().Format("2006_01_02_15_04_") + baseDir + ".zip"
+	id := Config.ID
+	if id != "" {
+		id, _ = os.Hostname()
+	}
+	target := time.Now().Format("2006_01_02_15_04_") + id + "_" + baseDir + ".zip"
 	zipfile, err := os.Create(target)
 	if err != nil {
 		panic(err)

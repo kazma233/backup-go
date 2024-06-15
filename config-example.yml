@@ -9,8 +9,12 @@ mail:
   port: 'port'
   user: 'user'
   password: 'password'
+notice_mail: 'notice_mail'
 tg:
   key: 'key'
-notice_mail: 'notice_mail'
 tg_chat_id: 'tg_chat_id'
 back_path: 'xxxx/path'
+corn:
+  backup_task: '0 25 0 * * ?'
+  liveness: '0 0 0 * * ?'
+id: ''

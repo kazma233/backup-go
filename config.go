@@ -12,9 +12,11 @@ type (
 		OSS        OssConfig   `yaml:"oss"`
 		Mail       *MailConfig `yaml:"mail"`
 		TG         *TGConfig   `yaml:"tg"`
+		Cron       CornConfig  `yaml:"cron"`
 		BackPath   string      `yaml:"back_path"`
 		TgChatId   string      `yaml:"tg_chat_id"`
 		NoticeMail string      `yaml:"notice_mail"`
+		ID         string      `yaml:"id"`
 	}
 
 	OssConfig struct {
@@ -34,6 +36,11 @@ type (
 		Port     int    `yaml:"port"`
 		User     string `yaml:"user"`
 		Password string `yaml:"password"`
+	}
+
+	CornConfig struct {
+		BackupTask string `yaml:"backup_task"`
+		Liveness   string `yaml:"liveness"`
 	}
 )
 
