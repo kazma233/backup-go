@@ -51,5 +51,5 @@ func (m *Message) Add(content string) {
 }
 
 func (m *Message) Clean() {
-	clear(m.messageItems)
+	m.messageItems = make([]MessageBody, 0)
 }
