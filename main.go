@@ -1,16 +1,11 @@
 package main
 
 import (
-	"archive/zip"
-	"errors"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
@@ -33,6 +28,7 @@ var (
 
 func main() {
 	InitConfig()
+	InitID()
 
 	if Config.TG != nil {
 		tb := NewTgBot(Config.TG.Key)
@@ -120,7 +116,7 @@ func mailNoticeAndClean() {
 }
 
 func notice(path string, mt MessageType) {
-	message := fmt.Sprintf(`备份通知：【%s】：%s目录：%s`, GetId(), path, mt)
+	message := fmt.Sprintf(`备份通知：【%s】：%s目录：%s`, ID, path, mt)
 	sendMessage(message)
 }
 
@@ -136,9 +132,6 @@ func sendMessage(message string) {
 func cleanOld(ossClient *OssClient) {
 	sendMessage("cleanOld start")
 
-	beforeDate := time.Now().AddDate(0, 0, -7)
-	beforeYear, beforeMonth, beforeMonthOfDay := beforeDate.Year(), int(beforeDate.Month()), beforeDate.Day()
-
 	var objects []oss.ObjectProperties
 	token := ""
 	for {
@@ -148,28 +141,8 @@ func cleanOld(ossClient *OssClient) {
 		}
 
 		for _, object := range resp.Objects {
-			sp := strings.Split(object.Key, "_")
-			if len(sp) < 6 {
-				continue
-			}
-			year, err := strconv.Atoi(sp[0])
-			if err != nil {
-				continue
-			}
-			month, err := strconv.Atoi(sp[1])
-			if err != nil {
-				continue
-			}
-			day, err := strconv.Atoi(sp[2])
-			if err != nil {
-				continue
-			}
-
-			if year < beforeYear {
-				objects = append(objects, object)
-			} else if year == beforeYear && month < beforeMonth {
-				objects = append(objects, object)
-			} else if year == beforeYear && month == beforeMonth && day < beforeMonthOfDay {
+			need := NeedDeleteFile(object.Key)
+			if need {
 				objects = append(objects, object)
 			}
 		}
@@ -219,87 +192,4 @@ func backup(path string, ossClient *OssClient) {
 
 	url, err := ossClient.TempVisitLink(objKey)
 	sendMessage(fmt.Sprintf("obj temp url is %s error %v", url, err))
-}
-
-func zipPath(source string) (string, error) {
-	info, err := os.Stat(source)
-	if err != nil {
-		panic(err)
-	}
-
-	if !info.IsDir() {
-		panic(errors.New("path is not dir"))
-	}
-	baseDir := filepath.Base(source)
-
-	target := GetId() + "_" + time.Now().Format("2006_01_02_15_04_") + baseDir + ".zip"
-	zipfile, err := os.Create(target)
-	if err != nil {
-		panic(err)
-	}
-	defer zipfile.Close()
-
-	archive := zip.NewWriter(zipfile)
-	defer archive.Close()
-
-	err = filepath.Walk(source, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
-		header, err := zip.FileInfoHeader(info)
-		if err != nil {
-			return err
-		}
-
-		n := baseDir + filepath.ToSlash(strings.TrimPrefix(path, source))
-		if n == "" {
-			return nil
-		}
-		header.Name = n
-
-		if info.IsDir() {
-			header.Name += "/"
-		} else {
-			header.Method = zip.Deflate
-		}
-
-		writer, err := archive.CreateHeader(header)
-		if err != nil {
-			return err
-		}
-
-		if !info.IsDir() {
-			file, err := os.Open(path)
-			if err != nil {
-				return err
-			}
-			defer file.Close()
-
-			_, err = io.Copy(writer, file)
-			return err
-		}
-
-		return nil
-	})
-
-	if err != nil {
-		panic(err)
-	}
-
-	return target, nil
-}
-
-func GetId() string {
-	id := Config.ID
-	if id != "" {
-		return id
-	}
-
-	hostname, err := os.Hostname()
-	if err != nil {
-		return "ERROR_ID"
-	}
-
-	return hostname
 }
