@@ -9,7 +9,8 @@ mail:
   port: 'port'
   user: 'user'
   password: 'password'
-notice_mail: 'notice_mail'
+notice_mail: 
+  - 'notice_mail'
 tg:
   key: 'key'
 tg_chat_id: 'tg_chat_id'

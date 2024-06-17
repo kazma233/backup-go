@@ -15,7 +15,7 @@ type (
 		Cron       CornConfig  `yaml:"cron"`
 		BackPath   string      `yaml:"back_path"`
 		TgChatId   string      `yaml:"tg_chat_id"`
-		NoticeMail string      `yaml:"notice_mail"`
+		NoticeMail []string    `yaml:"notice_mail"`
 		ID         string      `yaml:"id"`
 	}
 

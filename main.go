@@ -27,6 +27,8 @@ var (
 
 	tgBot      *TGBot
 	mailSender *MailSender
+
+	msg = NewMessage()
 )
 
 func main() {
@@ -68,14 +70,13 @@ func main() {
 	}
 
 	livenessCron := Config.Cron.Liveness
-	if livenessCron == "" {
-		livenessCron = "0 0 0 * * ?"
-	}
-	_, err = c.AddFunc(livenessCron, func() {
-		sendMessage(fmt.Sprintf("live check report %v", time.Now()))
-	})
-	if err != nil {
-		panic(err)
+	if livenessCron != "" {
+		_, err = c.AddFunc(livenessCron, func() {
+			sendMessage(fmt.Sprintf("live check report %v", time.Now()))
+		})
+		if err != nil {
+			panic(err)
+		}
 	}
 
 	sendMessage(fmt.Sprintf("start task: %v, backup path: %v", taskId, Config.BackPath))
@@ -100,11 +101,26 @@ func backupTask(ossClient *OssClient) {
 	backup(path, ossClient)
 	cleanOld(ossClient)
 	notice(path, DONE)
+	mailNoticeAndClean()
+}
+
+func mailNoticeAndClean() {
+	if mailSender != nil {
+		mailContent := msg.String()
+		defer msg.Clean()
+
+		mailList := Config.NoticeMail
+		for _, mail := range mailList {
+			err := mailSender.SendEmail("backup-go", mail, "备份消息通知", mailContent)
+			if err != nil {
+				log.Printf("mail notice error %v", err)
+			}
+		}
+	}
 }
 
 func notice(path string, mt MessageType) {
-	hostname, _ := os.Hostname()
-	message := fmt.Sprintf(`备份通知：【%s】：%s目录：%s`, hostname, path, mt)
+	message := fmt.Sprintf(`备份通知：【%s】：%s目录：%s`, GetId(), path, mt)
 	sendMessage(message)
 }
 
@@ -114,12 +130,7 @@ func sendMessage(message string) {
 		resp, err := tgBot.SendMessage(Config.TgChatId, message)
 		log.Printf("tg notice resp %s error %v", resp, err)
 	}
-	if mailSender != nil {
-		err := mailSender.SendEmail("backup-go", Config.NoticeMail, "备份消息通知", message)
-		if err != nil {
-			log.Printf("mail notice error %v", err)
-		}
-	}
+	msg.Add(message)
 }
 
 func cleanOld(ossClient *OssClient) {
@@ -221,11 +232,7 @@ func zipPath(source string) (string, error) {
 	}
 	baseDir := filepath.Base(source)
 
-	id := Config.ID
-	if id != "" {
-		id, _ = os.Hostname()
-	}
-	target := time.Now().Format("2006_01_02_15_04_") + id + "_" + baseDir + ".zip"
+	target := GetId() + "_" + time.Now().Format("2006_01_02_15_04_") + baseDir + ".zip"
 	zipfile, err := os.Create(target)
 	if err != nil {
 		panic(err)
@@ -281,4 +288,18 @@ func zipPath(source string) (string, error) {
 	}
 
 	return target, nil
+}
+
+func GetId() string {
+	id := Config.ID
+	if id != "" {
+		return id
+	}
+
+	hostname, err := os.Hostname()
+	if err != nil {
+		return "ERROR_ID"
+	}
+
+	return hostname
 }
