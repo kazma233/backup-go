@@ -1,6 +1,7 @@
 package main
 
 import (
+	"backup-go/config"
 	"log"
 	"os"
 )
@@ -13,7 +14,7 @@ func InitID() {
 }
 
 func getId() string {
-	id := Config.ID
+	id := config.Config.ID
 	if id != "" {
 		return id
 	}

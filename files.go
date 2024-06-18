@@ -20,7 +20,12 @@ func NeedDeleteFile(name string) bool {
 		return false
 	}
 
-	dateStartIndex := 1
+	dateStartIndex := 0
+	if !strings.EqualFold(sp[dateStartIndex], ID) {
+		return false
+	}
+
+	dateStartIndex += 1
 	year, err := strconv.Atoi(sp[dateStartIndex])
 	if err != nil {
 		return false

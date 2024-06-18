@@ -1,6 +1,7 @@
 package main
 
 import (
+	"backup-go/config"
 	"errors"
 	"fmt"
 	"log"
@@ -21,15 +22,15 @@ type (
 func CreateOSSClient() *OssClient {
 	ossClient := &OssClient{
 		slowBucket: must(getBucket(
-			Config.OSS.Endpoint,
-			Config.OSS.AccessKey,
-			Config.OSS.AccessKeySecret,
-			Config.OSS.BucketName)), // slowBucket must not nil
+			config.Config.OSS.Endpoint,
+			config.Config.OSS.AccessKey,
+			config.Config.OSS.AccessKeySecret,
+			config.Config.OSS.BucketName)), // slowBucket must not nil
 		fastBucket: getBucket(
-			Config.OSS.FastEndpoint,
-			Config.OSS.AccessKey,
-			Config.OSS.AccessKeySecret,
-			Config.OSS.BucketName,
+			config.Config.OSS.FastEndpoint,
+			config.Config.OSS.AccessKey,
+			config.Config.OSS.AccessKeySecret,
+			config.Config.OSS.BucketName,
 		),
 	}
 

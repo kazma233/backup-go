@@ -1,4 +1,4 @@
-package main
+package notice
 
 import (
 	"fmt"
@@ -30,7 +30,7 @@ func (m *Message) NewOne() *MessageBody {
 	return &i
 }
 
-func (m *Message) String() string {
+func (m *Message) String(sep string) string {
 	if m.messageItems == nil || len(m.messageItems) <= 0 {
 		return ""
 	}
@@ -40,7 +40,7 @@ func (m *Message) String() string {
 		result = append(result, fmt.Sprintf("%s: %s", m.Date.Format("2006-01-02 15:04:05"), m.Content))
 	}
 
-	return strings.Join(result, "\n")
+	return strings.Join(result, sep)
 }
 
 func (m *Message) Add(content string) {

@@ -1,6 +1,8 @@
 package main
 
 import (
+	"backup-go/config"
+	"backup-go/notice"
 	"fmt"
 	"log"
 	"net/http"
@@ -13,33 +15,20 @@ import (
 )
 
 type (
-	MessageType string
+	MessageStatus string
 )
 
 var (
-	START MessageType = "备份开始"
-	DONE  MessageType = "备份结束"
+	START MessageStatus = "备份开始"
+	DONE  MessageStatus = "备份结束"
 
-	tgBot      *TGBot
-	mailSender *MailSender
-
-	msg = NewMessage()
+	noticeHandle *notice.Notice
 )
 
 func main() {
-	InitConfig()
+	config.InitConfig()
 	InitID()
-
-	if Config.TG != nil {
-		tb := NewTgBot(Config.TG.Key)
-		tgBot = &tb
-	}
-
-	mailConfig := Config.Mail
-	if mailConfig != nil {
-		ms := NewMailSender(mailConfig.Smtp, mailConfig.Port, mailConfig.User, mailConfig.Password)
-		mailSender = &ms
-	}
+	noticeHandle = notice.InitNotice()
 
 	secondParser := cron.NewParser(
 		cron.Second |
@@ -54,7 +43,7 @@ func main() {
 
 	ossClient := CreateOSSClient()
 
-	backupTaskCron := Config.Cron.BackupTask
+	backupTaskCron := config.Config.Cron.BackupTask
 	if backupTaskCron == "" {
 		backupTaskCron = "0 25 0 * * ?"
 	}
@@ -65,7 +54,7 @@ func main() {
 		panic(err)
 	}
 
-	livenessCron := Config.Cron.Liveness
+	livenessCron := config.Config.Cron.Liveness
 	if livenessCron != "" {
 		_, err = c.AddFunc(livenessCron, func() {
 			sendMessage(fmt.Sprintf("live check report %v", time.Now()))
@@ -75,7 +64,7 @@ func main() {
 		}
 	}
 
-	sendMessage(fmt.Sprintf("start task: %v, backup path: %v", taskId, Config.BackPath))
+	sendMessage(fmt.Sprintf("start task: %v, backup path: %v", taskId, config.Config.BackPath))
 
 	c.Start()
 
@@ -92,41 +81,28 @@ func backupTask(ossClient *OssClient) {
 		}
 	}()
 
-	path := Config.BackPath
-	notice(path, START)
+	path := config.Config.BackPath
+	sendNotice(path, START)
 	backup(path, ossClient)
 	cleanOld(ossClient)
-	notice(path, DONE)
-	mailNoticeAndClean()
+	sendNotice(path, DONE)
 }
 
-func mailNoticeAndClean() {
-	if mailSender != nil {
-		mailContent := msg.String()
-		defer msg.Clean()
-
-		mailList := Config.NoticeMail
-		for _, mail := range mailList {
-			err := mailSender.SendEmail("backup-go", mail, "备份消息通知", mailContent)
-			if err != nil {
-				log.Printf("mail notice error %v", err)
-			}
-		}
-	}
-}
-
-func notice(path string, mt MessageType) {
+func sendNotice(path string, mt MessageStatus) {
 	message := fmt.Sprintf(`备份通知：【%s】：%s目录：%s`, ID, path, mt)
-	sendMessage(message)
+	sendMessageExt(message, mt == DONE)
 }
 
 func sendMessage(message string) {
+	sendMessageExt(message, false)
+}
+
+func sendMessageExt(message string, over bool) {
 	log.Println(message)
-	if tgBot != nil {
-		resp, err := tgBot.SendMessage(Config.TgChatId, message)
-		log.Printf("tg notice resp %s error %v", resp, err)
+	resp, err := noticeHandle.SendMessage(message, over)
+	if err != nil {
+		log.Printf("sendNotice resp %s, error %v", resp, err)
 	}
-	msg.Add(message)
 }
 
 func cleanOld(ossClient *OssClient) {
