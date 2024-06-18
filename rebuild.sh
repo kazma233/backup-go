@@ -23,7 +23,7 @@ else
 fi
 
 # 编译新的二进制文件
-rm "$PROCESS_NAME"
+rm -f "$PROCESS_NAME"
 echo "Remove old $PROCESS_NAME binary"
 go build -o "$PROCESS_NAME"
 echo "Compiled new $PROCESS_NAME binary"
