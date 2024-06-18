@@ -3,45 +3,24 @@ package main
 import (
 	"archive/zip"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
 )
 
-const FIX_STEP = "_"
-const DATE_FORMAT = "2006_01_02_15_04_05"
-
 func NeedDeleteFile(name string) bool {
-	sp := strings.Split(name, FIX_STEP)
-	if len(sp) < 7 {
-		return false
-	}
-
-	dateStartIndex := 0
-	if !strings.EqualFold(sp[dateStartIndex], ID) {
-		return false
-	}
-
-	dateStartIndex += 1
-	year, err := strconv.Atoi(sp[dateStartIndex])
+	fp := FileNameProcessor{}
+	err := fp.Parse(name)
 	if err != nil {
 		return false
 	}
 
-	dateStartIndex += 1
-	month, err := strconv.Atoi(sp[dateStartIndex])
-	if err != nil {
-		return false
-	}
-	dateStartIndex += 1
-	day, err := strconv.Atoi(sp[dateStartIndex])
-	if err != nil {
-		return false
-	}
-
+	year, month, day := fp.year, fp.month, fp.day
 	beforeDate := time.Now().AddDate(0, 0, -7)
 	beforeYear, beforeMonth, beforeMonthOfDay := beforeDate.Year(), int(beforeDate.Month()), beforeDate.Day()
 
@@ -57,7 +36,53 @@ func NeedDeleteFile(name string) bool {
 }
 
 func GetFileName() string {
-	return ID + FIX_STEP + time.Now().Format(DATE_FORMAT) + ".zip"
+	return FileNameProcessor{}.Generate(ID, time.Now()) + ".zip"
+}
+
+// FileNameProcessor 结构体，用于处理字符串
+type FileNameProcessor struct {
+	prefix string
+	year   int
+	month  int
+	day    int
+	rg     *regexp.Regexp // match string
+}
+
+// Generate 生成包含前缀和日期的字符串
+func (sp FileNameProcessor) Generate(prefix string, t time.Time) string {
+	return fmt.Sprintf("%s_%d_%02d_%02d", prefix, t.Year(), t.Month(), t.Day())
+}
+
+// Parse 解析包含前缀和日期的字符串，并填充结构体
+func (sp FileNameProcessor) Parse(s string) error {
+	// 正则表达式匹配前缀和日期，忽略后面的任何字符
+	re := regexp.MustCompile(`^([^_]+)_(\d{4})(\d{2})(\d{2})`)
+	matches := re.FindStringSubmatch(s)
+
+	if matches == nil {
+		return errors.New("invalid string format")
+	}
+
+	sp.prefix = matches[1]
+	year, err := strconv.Atoi(matches[2])
+	if err != nil {
+		return err
+	}
+	sp.year = year
+
+	month, err := strconv.Atoi(matches[3])
+	if err != nil || month < 1 || month > 12 {
+		return errors.New("invalid month value")
+	}
+	sp.month = month
+
+	day, err := strconv.Atoi(matches[4])
+	if err != nil || day < 1 || day > 31 {
+		return errors.New("invalid day value")
+	}
+	sp.day = day
+
+	return nil
 }
 
 func zipPath(source string) (string, error) {

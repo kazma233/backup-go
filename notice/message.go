@@ -21,15 +21,6 @@ func NewMessage() *Message {
 	}
 }
 
-func (m *Message) NewOne() *MessageBody {
-	if m.messageItems == nil || len(m.messageItems) <= 0 {
-		return nil
-	}
-
-	i := m.messageItems[len(m.messageItems)-1]
-	return &i
-}
-
 func (m *Message) String(sep string) string {
 	if m.messageItems == nil || len(m.messageItems) <= 0 {
 		return ""
