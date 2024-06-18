@@ -20,7 +20,7 @@ func sendMessage(message string) {
 }
 
 func sendMessageExt(message string, over bool) {
-	msg := fmt.Sprintf("【备份服务(%s)通知】:%s", config.Config.ID, message)
+	msg := fmt.Sprintf("【备份服务(%s)通知】%s", config.Config.ID, message)
 	log.Println(msg)
 	resp, err := noticeHandle.SendMessage(msg, over)
 	if err != nil {
