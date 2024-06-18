@@ -2,7 +2,6 @@ package main
 
 import (
 	"backup-go/config"
-	"backup-go/notice"
 	"fmt"
 	"log"
 	"net/http"
@@ -14,30 +13,12 @@ import (
 	"github.com/robfig/cron/v3"
 )
 
-type (
-	MessageStatus string
-)
-
-var (
-	START MessageStatus = "备份开始"
-	DONE  MessageStatus = "备份结束"
-
-	noticeHandle *notice.Notice
-)
-
 func main() {
 	config.InitConfig()
-	InitID()
-	noticeHandle = notice.InitNotice()
+	InitNotice()
 
 	secondParser := cron.NewParser(
-		cron.Second |
-			cron.Minute |
-			cron.Hour |
-			cron.Dom |
-			cron.Month |
-			cron.DowOptional |
-			cron.Descriptor,
+		cron.Second | cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.DowOptional | cron.Descriptor,
 	)
 	c := cron.New(cron.WithParser(secondParser), cron.WithChain())
 
@@ -64,7 +45,10 @@ func main() {
 		}
 	}
 
-	sendMessage(fmt.Sprintf("start task: %v, backup path: %v", taskId, config.Config.BackPath))
+	sendMessage(
+		fmt.Sprintf("start task: %d, id %s, backup path: %s",
+			taskId, config.Config.ID, config.Config.BackPath),
+	)
 
 	c.Start()
 
@@ -82,31 +66,17 @@ func backupTask(ossClient *OssClient) {
 	}()
 
 	path := config.Config.BackPath
-	sendNotice(path, START)
+	sendMessage(fmt.Sprintf(`%s目录：备份开始`, path))
 	backup(path, ossClient)
 	cleanOld(ossClient)
-	sendNotice(path, DONE)
-}
-
-func sendNotice(path string, mt MessageStatus) {
-	message := fmt.Sprintf(`备份通知：【%s】：%s目录：%s`, ID, path, mt)
-	sendMessageExt(message, mt == DONE)
-}
-
-func sendMessage(message string) {
-	sendMessageExt(message, false)
-}
-
-func sendMessageExt(message string, over bool) {
-	log.Println(message)
-	resp, err := noticeHandle.SendMessage(message, over)
-	if err != nil {
-		log.Printf("sendNotice resp %s, error %v", resp, err)
-	}
+	sendMessageExt(fmt.Sprintf(`%s目录：备份结束`, path), true)
 }
 
 func cleanOld(ossClient *OssClient) {
 	sendMessage("cleanOld start")
+	defer func() {
+		sendMessage("cleanOld done")
+	}()
 
 	var objects []oss.ObjectProperties
 	token := ""
@@ -130,6 +100,7 @@ func cleanOld(ossClient *OssClient) {
 	}
 
 	if objects == nil || len(objects) <= 0 {
+		sendMessage("no need delete")
 		return
 	}
 
@@ -138,17 +109,13 @@ func cleanOld(ossClient *OssClient) {
 		keys = append(keys, k.Key)
 	}
 	deleteObjects, err := ossClient.GetSlowClient().DeleteObjects(keys)
-	if err != nil {
-		panic(err)
-	}
-
-	sendMessage(fmt.Sprintf("delete result %v", deleteObjects))
+	sendMessage(fmt.Sprintf("delete result %v, err %v", deleteObjects, err))
 }
 
 func backup(path string, ossClient *OssClient) {
-	sendMessage(fmt.Sprintf("start backup %s", path))
+	sendMessage(fmt.Sprintf("%s backup start", path))
 
-	zipFile, err := zipPath(path)
+	zipFile, err := zipPath(path, config.Config.ID)
 	if err != nil {
 		panic(err)
 	}

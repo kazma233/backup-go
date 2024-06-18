@@ -58,5 +58,9 @@ func InitConfig() {
 		panic(err)
 	}
 
+	if config.ID == "" {
+		panic("id can not be empty")
+	}
+
 	Config = config
 }

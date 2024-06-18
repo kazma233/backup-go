@@ -35,8 +35,8 @@ func NeedDeleteFile(name string) bool {
 	return false
 }
 
-func GetFileName() string {
-	return FileNameProcessor{}.Generate(ID, time.Now()) + ".zip"
+func GetFileName(prefix string) string {
+	return FileNameProcessor{}.Generate(prefix, time.Now()) + ".zip"
 }
 
 // FileNameProcessor 结构体，用于处理字符串
@@ -85,7 +85,7 @@ func (sp FileNameProcessor) Parse(s string) error {
 	return nil
 }
 
-func zipPath(source string) (string, error) {
+func zipPath(source string, prefix string) (string, error) {
 	info, err := os.Stat(source)
 	if err != nil {
 		panic(err)
@@ -96,7 +96,7 @@ func zipPath(source string) (string, error) {
 	}
 	baseDir := filepath.Base(source)
 
-	target := GetFileName()
+	target := GetFileName(prefix)
 	zipfile, err := os.Create(target)
 	if err != nil {
 		panic(err)
