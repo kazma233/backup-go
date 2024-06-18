@@ -68,7 +68,7 @@ func (oc *OssClient) Upload(objKey, filePath string, noticeFunc UploadNoticeFunc
 }
 
 func (oc *OssClient) TempVisitLink(objKey string) (string, error) {
-	return oc.slowBucket.SignURL(objKey, oss.HTTPGet, 60*60*24*7)
+	return oc.slowBucket.SignURL(objKey, oss.HTTPGet, 60*60*24*1)
 }
 
 func (oc *OssClient) GetSlowClient() *oss.Bucket {
