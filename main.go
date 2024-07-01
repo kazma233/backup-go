@@ -87,7 +87,7 @@ func cleanOld(ossClient *OssClient) {
 		}
 
 		for _, object := range resp.Objects {
-			need := NeedDeleteFile(object.Key)
+			need := NeedDeleteFile(config.Config.ID, object.Key)
 			if need {
 				objects = append(objects, object)
 			}
