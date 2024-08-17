@@ -16,11 +16,11 @@ import (
 func NeedDeleteFile(prefix, name string) bool {
 	fp := NewProcessor()
 	err := fp.Parse(name)
-	if err != nil || !strings.EqualFold(fp.prefix, prefix) {
+	if err != nil || !strings.EqualFold(fp.Prefix, prefix) {
 		return false
 	}
 
-	year, month, day := fp.year, fp.month, fp.day
+	year, month, day := fp.Year, fp.Month, fp.Day
 	beforeDate := time.Now().AddDate(0, 0, -7)
 	beforeYear, beforeMonth, beforeMonthOfDay := beforeDate.Year(), int(beforeDate.Month()), beforeDate.Day()
 
@@ -115,10 +115,10 @@ type FileNameProcessor struct {
 	rg     *regexp.Regexp // match string
 	format string
 	// parse data
-	prefix string
-	year   int
-	month  int
-	day    int
+	Prefix string
+	Year   int
+	Month  int
+	Day    int
 }
 
 func NewProcessor() *FileNameProcessor {
@@ -142,24 +142,24 @@ func (sp *FileNameProcessor) Parse(s string) error {
 		return errors.New("invalid string format")
 	}
 
-	sp.prefix = matches[1]
+	sp.Prefix = matches[1]
 	year, err := strconv.Atoi(matches[2])
 	if err != nil {
 		return err
 	}
-	sp.year = year
+	sp.Year = year
 
 	month, err := strconv.Atoi(matches[3])
 	if err != nil || month < 1 || month > 12 {
 		return errors.New("invalid month value")
 	}
-	sp.month = month
+	sp.Month = month
 
 	day, err := strconv.Atoi(matches[4])
 	if err != nil || day < 1 || day > 31 {
 		return errors.New("invalid day value")
 	}
-	sp.day = day
+	sp.Day = day
 
 	return nil
 }
