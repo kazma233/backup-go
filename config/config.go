@@ -3,7 +3,7 @@ package config
 import (
 	_ "embed"
 
-	"gopkg.in/yaml.v2"
+	"github.com/goccy/go-yaml"
 )
 
 type (
