@@ -6,14 +6,16 @@ import (
 	"fmt"
 	"log"
 	"reflect"
+	"time"
 
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
 )
 
 type (
 	OssClient struct {
-		slowBucket *oss.Bucket
-		fastBucket *oss.Bucket
+		slowBucket      *oss.Bucket
+		fastBucket      *oss.Bucket
+		lastSuccessTime time.Time
 	}
 
 	UploadNoticeFunc func(string)
@@ -48,23 +50,40 @@ func (oc *OssClient) Upload(objKey, filePath string, noticeFunc UploadNoticeFunc
 	err = oc.slowBucket.PutObjectFromFile(objKey, filePath)
 	if err == nil {
 		noticeFunc("use slow bucket upload success")
+		oc.setLastSuccessTime()
 		return nil
-	} else {
-		noticeFunc(fmt.Sprintf("use slow bucket upload error: %v", err))
 	}
+	noticeFunc(fmt.Sprintf("use slow bucket upload error: %v", err))
 
 	if oc.fastBucket != nil {
-		noticeFunc("use fast bucket")
-		err := oc.fastBucket.PutObjectFromFile(objKey, filePath)
-		if err == nil {
-			noticeFunc("use fast bucket upload success")
-			return nil
+		if oc.canUseFastBucket() {
+			noticeFunc("use fast bucket")
+			err := oc.fastBucket.PutObjectFromFile(objKey, filePath)
+			if err == nil {
+				noticeFunc("use fast bucket upload success")
+				oc.setLastSuccessTime()
+			} else {
+				noticeFunc(fmt.Sprintf("use fast bucket upload failed: %v", err))
+			}
 		} else {
-			noticeFunc(fmt.Sprintf("use fast bucket upload faild: %v", err))
+			noticeFunc("fast bucket in 3-day cooldown")
 		}
+	} else {
+		noticeFunc("fast bucket not available")
 	}
 
 	return
+}
+
+func (oc *OssClient) canUseFastBucket() bool {
+	if oc.lastSuccessTime.IsZero() {
+		return true
+	}
+	return time.Since(oc.lastSuccessTime) > 3*24*time.Hour
+}
+
+func (oc *OssClient) setLastSuccessTime() {
+	oc.lastSuccessTime = time.Now()
 }
 
 func (oc *OssClient) TempVisitLink(objKey string) (string, error) {
