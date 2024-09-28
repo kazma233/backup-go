@@ -1,12 +1,13 @@
 package notice
 
 import (
+	"bytes"
 	"crypto/tls"
-	"encoding/base64"
 	"errors"
 	"fmt"
+	"mime"
+	"net/mail"
 	"net/smtp"
-	"regexp"
 	"strconv"
 )
 
@@ -18,8 +19,8 @@ type MailSender struct {
 }
 
 var (
-	reg             = regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
 	mailContentType = "text/html; charset=UTF-8"
+	crlf            = "\r\n"
 )
 
 func NewMailSender(smtpAddr string, port int, mailUser, password string) MailSender {
@@ -33,8 +34,8 @@ func (ms MailSender) SendEmail(fromName, to, subject, body string) error {
 	mailUer := ms.mailUser
 	password := ms.password
 
-	if !MailCheck(mailUer) || !MailCheck(to) {
-		return errors.New("mail check error")
+	if err := ms.validateEmails(mailUer, to); err != nil {
+		return errors.New("mail check error: " + err.Error())
 	}
 
 	addr := fmt.Sprintf("%s:%s", smtpAddr, strconv.Itoa(port))
@@ -78,23 +79,58 @@ func (ms MailSender) SendEmail(fromName, to, subject, body string) error {
 	}
 	defer w.Close()
 
-	headers := make(map[string]string)
-	headers["From"] = fmt.Sprintf("%s<%s>", fromName, mailUer)
-	headers["To"] = to
-	headers["Subject"] = "=?UTF-8?B?" + base64.StdEncoding.EncodeToString([]byte(subject)) + "?="
-	headers["Content-Type"] = mailContentType
-
-	// Setup message
-	message := ""
-	for k, v := range headers {
-		message += fmt.Sprintf("%s: %s\r\n", k, v)
-	}
-	message += "\r\n" + body
-
+	message := ms.buildMessage(fromName, to, subject, body)
 	_, err = w.Write([]byte(message))
 	return err
 }
 
-func MailCheck(mail string) bool {
-	return reg.MatchString(mail)
+func (ms *MailSender) validateEmails(emails ...string) error {
+	for _, email := range emails {
+		if _, err := mail.ParseAddress(email); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+func (ms *MailSender) buildMessage(fromName, to, subject, body string) string {
+	var buf bytes.Buffer
+
+	// 写入头部
+	writeHeader(&buf, "From", fmt.Sprintf("%s <%s>", ms.encodeRFC2047(fromName), ms.mailUser))
+	writeHeader(&buf, "To", to)
+	writeHeader(&buf, "Subject", ms.encodeRFC2047(subject))
+	writeHeader(&buf, "Content-Type", mailContentType)
+	writeHeader(&buf, "MIME-Version", "1.0")
+
+	// 添加空行分隔头部和正文
+	buf.WriteString(crlf)
+
+	// 写入正文
+	buf.WriteString(body)
+
+	return buf.String()
+}
+
+func (ms *MailSender) encodeRFC2047(s string) string {
+	// 如果字符串只包含 ASCII 字符，则不需要编码
+	if isASCII(s) {
+		return s
+	}
+	return mime.QEncoding.Encode("utf-8", s)
+}
+
+func writeHeader(buf *bytes.Buffer, key, value string) {
+	buf.WriteString(key)
+	buf.WriteString(": ")
+	buf.WriteString(value)
+	buf.WriteString(crlf)
+}
+
+func isASCII(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] > 127 {
+			return false
+		}
+	}
+	return true
 }

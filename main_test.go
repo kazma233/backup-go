@@ -6,7 +6,7 @@ import (
 )
 
 func Test_zipPath(t *testing.T) {
-	path, err := zipPath(`E:\audio\asmr`, "test")
+	path, err := zipPath(`/Users/fanggeek/Projects/cayenne`, "test")
 	if err != nil {
 		panic(err)
 	}

@@ -15,24 +15,14 @@ import (
 
 func NeedDeleteFile(prefix, name string) bool {
 	fp := NewProcessor()
-	err := fp.Parse(name)
-	if err != nil || !strings.EqualFold(fp.Prefix, prefix) {
+	if err := fp.Parse(name); err != nil || !strings.EqualFold(fp.Prefix, prefix) {
 		return false
 	}
 
-	year, month, day := fp.Year, fp.Month, fp.Day
+	fileDate := time.Date(fp.Year, time.Month(fp.Month), fp.Day, 0, 0, 0, 0, time.UTC)
 	beforeDate := time.Now().AddDate(0, 0, -7)
-	beforeYear, beforeMonth, beforeMonthOfDay := beforeDate.Year(), int(beforeDate.Month()), beforeDate.Day()
 
-	if year < beforeYear {
-		return true
-	} else if year == beforeYear && month < beforeMonth {
-		return true
-	} else if year == beforeYear && month == beforeMonth && day < beforeMonthOfDay {
-		return true
-	}
-
-	return false
+	return fileDate.Before(beforeDate)
 }
 
 func GetFileName(prefix string) string {
@@ -42,18 +32,19 @@ func GetFileName(prefix string) string {
 func zipPath(source string, prefix string) (string, error) {
 	info, err := os.Stat(source)
 	if err != nil {
-		panic(err)
+		return "", fmt.Errorf("获取源目录信息失败: %w", err)
 	}
 
 	if !info.IsDir() {
-		panic(errors.New("path is not dir"))
+		return "", errors.New("源路径不是目录")
 	}
-	baseDir := filepath.Base(source)
 
+	baseDir := filepath.Base(source)
 	target := GetFileName(prefix)
+
 	zipfile, err := os.Create(target)
 	if err != nil {
-		panic(err)
+		return "", fmt.Errorf("创建zip文件失败: %w", err)
 	}
 	defer zipfile.Close()
 
@@ -62,20 +53,20 @@ func zipPath(source string, prefix string) (string, error) {
 
 	err = filepath.Walk(source, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			return err
+			return fmt.Errorf("遍历目录失败: %w", err)
 		}
 
 		header, err := zip.FileInfoHeader(info)
 		if err != nil {
-			return err
+			return fmt.Errorf("创建文件头失败: %w", err)
 		}
 
-		n := baseDir + filepath.ToSlash(strings.TrimPrefix(path, source))
-		if n == "" {
-			return nil
+		relPath, err := filepath.Rel(source, path)
+		if err != nil {
+			return fmt.Errorf("获取相对路径失败: %w", err)
 		}
-		header.Name = n
 
+		header.Name = filepath.Join(baseDir, relPath)
 		if info.IsDir() {
 			header.Name += "/"
 		} else {
@@ -84,25 +75,29 @@ func zipPath(source string, prefix string) (string, error) {
 
 		writer, err := archive.CreateHeader(header)
 		if err != nil {
-			return err
+			return fmt.Errorf("创建文件头失败: %w", err)
 		}
 
-		if !info.IsDir() {
-			file, err := os.Open(path)
-			if err != nil {
-				return err
-			}
-			defer file.Close()
+		if info.IsDir() {
+			return nil
+		}
 
-			_, err = io.Copy(writer, file)
-			return err
+		file, err := os.Open(path)
+		if err != nil {
+			return fmt.Errorf("打开文件失败: %w", err)
+		}
+		defer file.Close()
+
+		_, err = io.Copy(writer, file)
+		if err != nil {
+			return fmt.Errorf("复制文件内容失败: %w", err)
 		}
 
 		return nil
 	})
 
 	if err != nil {
-		panic(err)
+		return "", fmt.Errorf("压缩过程中发生错误: %w", err)
 	}
 
 	return target, nil
