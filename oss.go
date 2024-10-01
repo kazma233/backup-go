@@ -72,7 +72,7 @@ func (oc *OssClient) Upload(objKey, filePath string, noticeFunc UploadNoticeFunc
 		noticeFunc("fast bucket not available")
 	}
 
-	return
+	return nil
 }
 
 func (oc *OssClient) canUseFastBucket() bool {
