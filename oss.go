@@ -57,7 +57,7 @@ func (oc *OssClient) Upload(objKey, filePath string, noticeFunc UploadNoticeFunc
 
 	noticeFunc("use slow bucket")
 	err = oc.upload(oc.slowBucket, objKey, filePath, noticeFunc)
-	if err != nil {
+	if err == nil {
 		return
 	}
 
@@ -66,24 +66,30 @@ func (oc *OssClient) Upload(objKey, filePath string, noticeFunc UploadNoticeFunc
 		return ErrCoolDown
 	}
 
-	return oc.upload(oc.fastBucket, objKey, filePath, noticeFunc)
+	err = oc.upload(oc.fastBucket, objKey, filePath, noticeFunc)
+	if err == nil {
+		return
+	}
+
+	return
 }
 
-func (oc *OssClient) upload(bucket *NamedBucket, objKey, filePath string, noticeFunc UploadNoticeFunc) (err error) {
+func (oc *OssClient) upload(bucket *NamedBucket, objKey, filePath string, noticeFunc UploadNoticeFunc) error {
 	if bucket == nil || bucket.Bucket == nil {
 		return fmt.Errorf("bucket %s not init", bucket.Name)
 	}
 
-	noticeFunc(fmt.Sprintf("use 【%s】 bucket upload", bucket.Name))
-	err = bucket.Bucket.PutObjectFromFile(objKey, filePath)
+	noticeFunc(fmt.Sprintf("use 【%s】 bucket uploading", bucket.Name))
+	err := bucket.Bucket.PutObjectFromFile(objKey, filePath)
 	if err != nil {
+		noticeFunc(fmt.Sprintf("use 【%s】 bucket upload failed, error: %v", bucket.Name, err))
 		return err
 	}
 
-	noticeFunc(fmt.Sprintf("upload to bucket %s success", bucket.Name))
+	noticeFunc(fmt.Sprintf("use 【%s】 bucket upload success", bucket.Name))
 	oc.setLastSuccessTime()
 
-	return
+	return nil
 }
 
 func (oc *OssClient) HasError(err error) bool {
