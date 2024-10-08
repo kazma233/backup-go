@@ -127,12 +127,15 @@ func backup(path string, ossClient *OssClient) {
 	err = ossClient.Upload(objKey, zipFile, func(message string) {
 		sendMessage(message)
 	})
-	if err != nil {
+	if ossClient.HasError(err) {
 		panic(err)
 	}
 
-	sendMessage(fmt.Sprintf("obj upload done %s", objKey))
-
-	url, err := ossClient.TempVisitLink(objKey)
-	sendMessage(fmt.Sprintf("obj temp url is %s error %v", url, err))
+	if ossClient.HasCoolDownError(err) {
+		sendMessage(fmt.Sprintf("obj %s upload not success, because of cool down", objKey))
+	} else {
+		sendMessage(fmt.Sprintf("obj %s upload done", objKey))
+		url, err := ossClient.TempVisitLink(objKey)
+		sendMessage(fmt.Sprintf("obj temp url: %s, error: %v", url, err))
+	}
 }

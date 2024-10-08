@@ -11,10 +11,17 @@ import (
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
 )
 
+var ErrCoolDown = errors.New("fast upload cool down")
+
 type (
+	NamedBucket struct {
+		Name   string
+		Bucket *oss.Bucket
+	}
+
 	OssClient struct {
-		slowBucket      *oss.Bucket
-		fastBucket      *oss.Bucket
+		slowBucket      *NamedBucket
+		fastBucket      *NamedBucket
 		lastSuccessTime time.Time
 	}
 
@@ -24,11 +31,13 @@ type (
 func CreateOSSClient() *OssClient {
 	ossClient := &OssClient{
 		slowBucket: must(getBucket(
+			"SLOW",
 			config.Config.OSS.Endpoint,
 			config.Config.OSS.AccessKey,
 			config.Config.OSS.AccessKeySecret,
 			config.Config.OSS.BucketName)), // slowBucket must not nil
 		fastBucket: getBucket(
+			"FAST",
 			config.Config.OSS.FastEndpoint,
 			config.Config.OSS.AccessKey,
 			config.Config.OSS.AccessKeySecret,
@@ -47,32 +56,42 @@ func (oc *OssClient) Upload(objKey, filePath string, noticeFunc UploadNoticeFunc
 	}
 
 	noticeFunc("use slow bucket")
-	err = oc.slowBucket.PutObjectFromFile(objKey, filePath)
-	if err == nil {
-		noticeFunc("use slow bucket upload success")
-		oc.setLastSuccessTime()
-		return nil
-	}
-	noticeFunc(fmt.Sprintf("use slow bucket upload error: %v", err))
-
-	if oc.fastBucket != nil {
-		if oc.canUseFastBucket() {
-			noticeFunc("use fast bucket")
-			err := oc.fastBucket.PutObjectFromFile(objKey, filePath)
-			if err == nil {
-				noticeFunc("use fast bucket upload success")
-				oc.setLastSuccessTime()
-			} else {
-				noticeFunc(fmt.Sprintf("use fast bucket upload failed: %v", err))
-			}
-		} else {
-			noticeFunc("fast bucket in 3-day cooldown")
-		}
-	} else {
-		noticeFunc("fast bucket not available")
+	err = oc.upload(oc.slowBucket, objKey, filePath, noticeFunc)
+	if err != nil {
+		return
 	}
 
-	return nil
+	if !oc.canUseFastBucket() {
+		noticeFunc("fast bucket in 3-day cooldown")
+		return ErrCoolDown
+	}
+
+	return oc.upload(oc.fastBucket, objKey, filePath, noticeFunc)
+}
+
+func (oc *OssClient) upload(bucket *NamedBucket, objKey, filePath string, noticeFunc UploadNoticeFunc) (err error) {
+	if bucket == nil || bucket.Bucket == nil {
+		return fmt.Errorf("bucket %s not init", bucket.Name)
+	}
+
+	noticeFunc(fmt.Sprintf("use 【%s】 bucket upload", bucket.Name))
+	err = bucket.Bucket.PutObjectFromFile(objKey, filePath)
+	if err != nil {
+		return err
+	}
+
+	noticeFunc(fmt.Sprintf("upload to bucket %s success", bucket.Name))
+	oc.setLastSuccessTime()
+
+	return
+}
+
+func (oc *OssClient) HasError(err error) bool {
+	return err != nil && err != ErrCoolDown
+}
+
+func (oc *OssClient) HasCoolDownError(err error) bool {
+	return err == ErrCoolDown
 }
 
 func (oc *OssClient) canUseFastBucket() bool {
@@ -87,11 +106,15 @@ func (oc *OssClient) setLastSuccessTime() {
 }
 
 func (oc *OssClient) TempVisitLink(objKey string) (string, error) {
-	return oc.slowBucket.SignURL(objKey, oss.HTTPGet, 60*60*24*1)
+	if oc.slowBucket == nil || oc.slowBucket.Bucket == nil {
+		return "", errors.New("bucket not init")
+	}
+
+	return oc.slowBucket.Bucket.SignURL(objKey, oss.HTTPGet, 60*60*24*1)
 }
 
 func (oc *OssClient) GetSlowClient() *oss.Bucket {
-	return oc.slowBucket
+	return oc.slowBucket.Bucket
 }
 
 func must[T any](obj T) T {
@@ -117,7 +140,7 @@ func canBeNil(kind reflect.Kind) bool {
 		kind == reflect.Func
 }
 
-func getBucket(endpoint, ak, aks, buckatName string) *oss.Bucket {
+func getBucket(customName, endpoint, ak, aks, buckatName string) *NamedBucket {
 	if endpoint == "" || ak == "" || aks == "" || buckatName == "" {
 		return nil
 	}
@@ -132,5 +155,8 @@ func getBucket(endpoint, ak, aks, buckatName string) *oss.Bucket {
 		panic(err)
 	}
 
-	return bucket
+	return &NamedBucket{
+		Name:   customName,
+		Bucket: bucket,
+	}
 }
