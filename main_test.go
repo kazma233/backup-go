@@ -1,11 +1,18 @@
 package main
 
 import (
+	"backup-go/config"
 	"log"
 	"testing"
 )
 
+func before() {
+	config.InitConfig()
+}
+
 func Test_zipPath(t *testing.T) {
+	before()
+
 	path, err := zipPath(`/Users/fanggeek/Projects/cayenne`, "test")
 	if err != nil {
 		panic(err)
@@ -15,11 +22,21 @@ func Test_zipPath(t *testing.T) {
 }
 
 func Test_backup(t *testing.T) {
-	oc := CreateOSSClient()
-	backup(`E:\audio\asmr`, oc)
+	before()
+
+	th := defaultHolder("test")
+	th.conf = config.BackupConfig{
+		BackPath: "E:/audio/asmr",
+	}
+	th.backup()
 }
 
 func Test_cleanOld(t *testing.T) {
-	oc := CreateOSSClient()
-	cleanOld(oc)
+	before()
+
+	th := defaultHolder("test")
+	th.conf = config.BackupConfig{
+		BackPath: "E:/audio/asmr",
+	}
+	th.cleanOld()
 }

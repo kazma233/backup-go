@@ -2,10 +2,12 @@ package main
 
 import (
 	"backup-go/config"
+	"backup-go/notice"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"time"
 
@@ -13,69 +15,83 @@ import (
 	"github.com/robfig/cron/v3"
 )
 
+type TaskHolder struct {
+	ID           string
+	conf         config.BackupConfig
+	oss          *OssClient
+	c            *cron.Cron
+	noticeHandle *notice.Notice
+}
+
+func defaultHolder(id string) *TaskHolder {
+	return &TaskHolder{
+		ID:           id,
+		oss:          CreateOSSClient(),
+		noticeHandle: notice.InitNotice(),
+	}
+}
+
 func main() {
 	config.InitConfig()
-	InitNotice()
 
 	secondParser := cron.NewParser(
 		cron.Second | cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.DowOptional | cron.Descriptor,
 	)
 	c := cron.New(cron.WithParser(secondParser), cron.WithChain())
 
-	ossClient := CreateOSSClient()
+	for id, conf := range config.Config.BackupConf {
+		dh := defaultHolder(id)
+		dh.conf = conf
+		dh.c = c
 
-	backupTaskCron := config.Config.Cron.BackupTask
-	if backupTaskCron == "" {
-		backupTaskCron = "0 25 0 * * ?"
-	}
-	taskId, err := c.AddFunc(backupTaskCron, func() {
-		backupTask(ossClient)
-	})
-	if err != nil {
-		panic(err)
-	}
-
-	livenessCron := config.Config.Cron.Liveness
-	if livenessCron != "" {
-		_, err = c.AddFunc(livenessCron, func() {
-			sendMessage(fmt.Sprintf("live check report %v", time.Now()))
+		backupTaskCron := conf.BackupTask
+		if backupTaskCron == "" {
+			backupTaskCron = "0 25 0 * * ?"
+		}
+		taskId, err := c.AddFunc(backupTaskCron, func() {
+			dh.backupTask()
 		})
 		if err != nil {
 			panic(err)
 		}
-	}
 
-	sendMessage(
-		fmt.Sprintf("start task: %d, id %s, backup path: %s",
-			taskId, config.Config.ID, config.Config.BackPath),
-	)
+		livenessCron := conf.Liveness
+		if livenessCron != "" {
+			_, err = c.AddFunc(livenessCron, func() {
+				dh.sendMessage(fmt.Sprintf("live check report %v", time.Now()))
+			})
+			if err != nil {
+				panic(err)
+			}
+		}
+
+		dh.sendMessage(fmt.Sprintf("task %v add success", taskId))
+	}
 
 	c.Start()
 
 	http.HandleFunc("/", func(resp http.ResponseWriter, req *http.Request) {
-		backupTask(ossClient)
+		// backupTask(ossClient)
 	})
 	log.Println(http.ListenAndServe(":7000", nil))
 }
 
-func backupTask(ossClient *OssClient) {
+func (c *TaskHolder) backupTask() {
 	defer func() {
 		if anyData := recover(); anyData != nil {
-			sendMessage(fmt.Sprintf("[WARN] exec backupTask has panic %v", anyData))
+			c.sendMessage(fmt.Sprintf("[WARN] exec backupTask has panic %v", anyData))
 		}
 	}()
 
-	path := config.Config.BackPath
-	sendMessage(fmt.Sprintf(`%s目录：备份开始`, path))
-	backup(path, ossClient)
-	cleanOld(ossClient)
-	sendMessageExt(fmt.Sprintf(`%s目录：备份结束`, path), true)
+	c.backup()
+	c.cleanOld()
 }
 
-func cleanOld(ossClient *OssClient) {
-	sendMessage("cleanOld start")
+func (c *TaskHolder) cleanOld() {
+	ossClient := c.oss
+	c.sendMessage("cleanOld start")
 	defer func() {
-		sendMessage("cleanOld done")
+		c.sendMessage("cleanOld done")
 	}()
 
 	var objects []oss.ObjectProperties
@@ -87,7 +103,7 @@ func cleanOld(ossClient *OssClient) {
 		}
 
 		for _, object := range resp.Objects {
-			need := NeedDeleteFile(config.Config.ID, object.Key)
+			need := NeedDeleteFile(c.ID, object.Key)
 			if need {
 				objects = append(objects, object)
 			}
@@ -100,7 +116,7 @@ func cleanOld(ossClient *OssClient) {
 	}
 
 	if objects == nil || len(objects) <= 0 {
-		sendMessage("no need delete")
+		c.sendMessage("no need delete")
 		return
 	}
 
@@ -109,33 +125,72 @@ func cleanOld(ossClient *OssClient) {
 		keys = append(keys, k.Key)
 	}
 	deleteObjects, err := ossClient.GetSlowClient().DeleteObjects(keys)
-	sendMessage(fmt.Sprintf("delete result %v, err %v", deleteObjects, err))
+	c.sendMessage(fmt.Sprintf("delete result %v, err %v", deleteObjects, err))
 }
 
-func backup(path string, ossClient *OssClient) {
-	sendMessage(fmt.Sprintf("%s backup start", path))
+func (c *TaskHolder) backup() {
+	conf := c.conf
+	c.sendMessage(fmt.Sprintf(`%s目录：备份开始`, conf.BackPath))
 
-	zipFile, err := zipPath(path, config.Config.ID)
+	path := conf.BackPath
+	ossClient := c.oss
+
+	if conf.BeforeCmd != "" {
+		// 执行系统命令
+		c.sendMessage(fmt.Sprintf("exec before command %s", conf.BeforeCmd))
+		cmd := exec.Command("sh", "-c", conf.BeforeCmd)
+		err := cmd.Run()
+		if err != nil {
+			c.sendMessage(fmt.Sprintf("exec before command %s error %v", conf.BeforeCmd, err))
+			return
+		}
+	}
+
+	zipFile, err := zipPath(path, c.ID)
 	if err != nil {
 		panic(err)
 	}
-
-	sendMessage(fmt.Sprintf("zip path %s to %s done", path, zipFile))
+	c.sendMessage(fmt.Sprintf("zip path %s to %s done", path, zipFile))
 	defer os.Remove(zipFile)
+
+	if conf.AfterCmd != "" {
+		// 执行系统命令
+		c.sendMessage(fmt.Sprintf("exec after command %s", conf.AfterCmd))
+		cmd := exec.Command("sh", "-c", conf.AfterCmd)
+		err := cmd.Run()
+		if err != nil {
+			c.sendMessage(fmt.Sprintf("exec after command %s error %v", conf.AfterCmd, err))
+		}
+	}
 
 	objKey := filepath.Base(zipFile)
 	err = ossClient.Upload(objKey, zipFile, func(message string) {
-		sendMessage(message)
+		c.sendMessage(message)
 	})
 	if ossClient.HasError(err) {
 		panic(err)
 	}
 
 	if ossClient.HasCoolDownError(err) {
-		sendMessage(fmt.Sprintf("obj %s upload not success, because of cool down", objKey))
+		c.sendMessage(fmt.Sprintf("obj %s upload not success, because of cool down", objKey))
 	} else {
-		sendMessage(fmt.Sprintf("obj %s upload done", objKey))
+		c.sendMessage(fmt.Sprintf("obj %s upload done", objKey))
 		url, err := ossClient.TempVisitLink(objKey)
-		sendMessage(fmt.Sprintf("obj temp url: %s, error: %v", url, err))
+		c.sendMessage(fmt.Sprintf("obj temp url: %s, error: %v", url, err))
+	}
+
+	c.sendMessageExt(fmt.Sprintf(`%s目录：备份结束`, path), true)
+}
+
+func (c *TaskHolder) sendMessage(message string) {
+	c.sendMessageExt(message, false)
+}
+
+func (c *TaskHolder) sendMessageExt(message string, over bool) {
+	msg := fmt.Sprintf("【备份服务(%s)通知】%s", c.ID, message)
+	log.Println(msg)
+	resp, err := c.noticeHandle.SendMessage(msg, over)
+	if err != nil {
+		log.Printf("sendNotice resp %s, error %v", resp, err)
 	}
 }
