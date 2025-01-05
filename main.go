@@ -19,13 +19,17 @@ type TaskHolder struct {
 	ID           string
 	conf         config.BackupConfig
 	oss          *OssClient
-	c            *cron.Cron
 	noticeHandle *notice.Notice
 }
 
-func defaultHolder(id string) *TaskHolder {
+func defaultHolder(id string, conf config.BackupConfig) *TaskHolder {
+	if id == "" || conf.BackPath == "" {
+		panic("id or back_path can not be empty")
+	}
+
 	return &TaskHolder{
 		ID:           id,
+		conf:         conf,
 		oss:          CreateOSSClient(),
 		noticeHandle: notice.InitNotice(),
 	}
@@ -40,9 +44,7 @@ func main() {
 	c := cron.New(cron.WithParser(secondParser), cron.WithChain())
 
 	for id, conf := range config.Config.BackupConf {
-		dh := defaultHolder(id)
-		dh.conf = conf
-		dh.c = c
+		dh := defaultHolder(id, conf)
 
 		backupTaskCron := conf.BackupTask
 		if backupTaskCron == "" {
@@ -72,8 +74,7 @@ func main() {
 
 	http.HandleFunc("/", func(resp http.ResponseWriter, req *http.Request) {
 		id := req.URL.Query().Get("id")
-		dh := defaultHolder(id)
-		dh.conf = config.Config.BackupConf[id]
+		dh := defaultHolder(id, config.Config.BackupConf[id])
 		fmt.Printf("backup task %v", dh)
 
 		dh.backupTask()

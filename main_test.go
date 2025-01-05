@@ -24,19 +24,17 @@ func Test_zipPath(t *testing.T) {
 func Test_backup(t *testing.T) {
 	before()
 
-	th := defaultHolder("test")
-	th.conf = config.BackupConfig{
+	th := defaultHolder("test", config.BackupConfig{
 		BackPath: "E:/audio/asmr",
-	}
+	})
 	th.backup()
 }
 
 func Test_cleanOld(t *testing.T) {
 	before()
 
-	th := defaultHolder("test")
-	th.conf = config.BackupConfig{
+	th := defaultHolder("test", config.BackupConfig{
 		BackPath: "E:/audio/asmr",
-	}
+	})
 	th.cleanOld()
 }
