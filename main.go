@@ -71,7 +71,12 @@ func main() {
 	c.Start()
 
 	http.HandleFunc("/", func(resp http.ResponseWriter, req *http.Request) {
-		// backupTask(ossClient)
+		id := req.URL.Query().Get("id")
+		dh := defaultHolder(id)
+		dh.conf = config.Config.BackupConf[id]
+		fmt.Printf("backup task %v", dh)
+
+		dh.backupTask()
 	})
 	log.Println(http.ListenAndServe(":7000", nil))
 }
