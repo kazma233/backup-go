@@ -181,8 +181,8 @@ func (c *TaskHolder) backup() {
 		c.sendMessage(fmt.Sprintf("obj %s upload not success, because of cool down", objKey))
 	} else {
 		c.sendMessage(fmt.Sprintf("obj %s upload done", objKey))
-		url, err := ossClient.TempVisitLink(objKey)
-		c.sendMessage(fmt.Sprintf("obj temp url: %s, error: %v", url, err))
+		// url, err := ossClient.TempVisitLink(objKey)
+		// c.sendMessage(fmt.Sprintf("obj temp url: %s, error: %v", url, err))
 	}
 
 	c.sendMessageExt(fmt.Sprintf(`%s目录：备份结束`, path), true)

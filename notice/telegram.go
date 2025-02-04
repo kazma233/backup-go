@@ -56,3 +56,43 @@ func (tgBot *TGBot) SendMessage(chatId, message string) (respStr string, err err
 
 	return string(body), nil
 }
+
+// Noticeable impl
+
+type TGNotice struct {
+	tg      *TGBot
+	message *Message
+	to      string
+}
+
+func NewTGExt(tg *TGBot, to string) *TGNotice {
+	return &TGNotice{
+		tg:      tg,
+		message: NewMessage(),
+		to:      to,
+	}
+}
+
+func (m *TGNotice) Type() MessageType {
+	return TG
+}
+
+func (m *TGNotice) SendMessageNow(content string) (string, error) {
+	resp, err := m.tg.SendMessage(m.to, content)
+	if err != nil {
+		return resp, err
+	}
+
+	return "", nil
+}
+
+func (m *TGNotice) AddMessage(content string) {
+	m.message.Add(content)
+}
+
+func (m *TGNotice) SendAddedMessage() (string, error) {
+	content := m.message.String("\n")
+	defer m.message.Clean()
+
+	return m.SendMessageNow(content)
+}
