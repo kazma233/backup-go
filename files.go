@@ -32,11 +32,11 @@ func GetFileName(prefix string) string {
 func zipPath(source string, prefix string) (string, error) {
 	info, err := os.Stat(source)
 	if err != nil {
-		return "", fmt.Errorf("获取源目录信息失败: %w", err)
+		return "", fmt.Errorf("stat source path failed: %w", err)
 	}
 
 	if !info.IsDir() {
-		return "", errors.New("源路径不是目录")
+		return "", errors.New("source path is not a directory")
 	}
 
 	baseDir := filepath.Base(source)
@@ -44,7 +44,7 @@ func zipPath(source string, prefix string) (string, error) {
 
 	zipfile, err := os.Create(target)
 	if err != nil {
-		return "", fmt.Errorf("创建zip文件失败: %w", err)
+		return "", fmt.Errorf("create zip file failed: %w", err)
 	}
 	defer zipfile.Close()
 
@@ -53,17 +53,17 @@ func zipPath(source string, prefix string) (string, error) {
 
 	err = filepath.Walk(source, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			return fmt.Errorf("遍历目录失败: %w", err)
+			return fmt.Errorf("walk failed: %w", err)
 		}
 
 		header, err := zip.FileInfoHeader(info)
 		if err != nil {
-			return fmt.Errorf("创建文件头失败: %w", err)
+			return fmt.Errorf("create file header failed: %w", err)
 		}
 
 		relPath, err := filepath.Rel(source, path)
 		if err != nil {
-			return fmt.Errorf("获取相对路径失败: %w", err)
+			return fmt.Errorf("rel path failed: %w", err)
 		}
 
 		header.Name = filepath.Join(baseDir, relPath)
@@ -75,7 +75,7 @@ func zipPath(source string, prefix string) (string, error) {
 
 		writer, err := archive.CreateHeader(header)
 		if err != nil {
-			return fmt.Errorf("创建文件头失败: %w", err)
+			return fmt.Errorf("create header failed: %w", err)
 		}
 
 		if info.IsDir() {
@@ -84,20 +84,20 @@ func zipPath(source string, prefix string) (string, error) {
 
 		file, err := os.Open(path)
 		if err != nil {
-			return fmt.Errorf("打开文件失败: %w", err)
+			return fmt.Errorf("open file failed: %w", err)
 		}
 		defer file.Close()
 
 		_, err = io.Copy(writer, file)
 		if err != nil {
-			return fmt.Errorf("复制文件内容失败: %w", err)
+			return fmt.Errorf("copy file failed: %w", err)
 		}
 
 		return nil
 	})
 
 	if err != nil {
-		return "", fmt.Errorf("压缩过程中发生错误: %w", err)
+		return "", fmt.Errorf("zip failed: %w", err)
 	}
 
 	return target, nil

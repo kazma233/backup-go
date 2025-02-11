@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"time"
 
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
 	"github.com/robfig/cron/v3"
@@ -57,17 +56,7 @@ func main() {
 			panic(err)
 		}
 
-		livenessCron := conf.Liveness
-		if livenessCron != "" {
-			_, err = c.AddFunc(livenessCron, func() {
-				dh.sendMessage(fmt.Sprintf("live check report %v", time.Now()))
-			})
-			if err != nil {
-				panic(err)
-			}
-		}
-
-		dh.sendMessage(fmt.Sprintf("task %v add success", taskId))
+		fmt.Printf("task %v add success", taskId)
 	}
 
 	c.Start()
@@ -83,21 +72,25 @@ func main() {
 }
 
 func (c *TaskHolder) backupTask() {
+	c.sendMessage(fmt.Sprintf("【%s】backupTask start", c.ID))
+
 	defer func() {
 		if anyData := recover(); anyData != nil {
-			c.sendMessage(fmt.Sprintf("[WARN] exec backupTask has panic %v", anyData))
+			c.sendMessageExt(fmt.Sprintf("【%s】backupTask has panic %v", c.ID, anyData), true)
+		} else {
+			c.sendMessageExt(fmt.Sprintf("【%s】backupTask finish", c.ID), true)
 		}
 	}()
 
 	c.backup()
-	c.cleanOld()
+	c.cleanHistory()
 }
 
-func (c *TaskHolder) cleanOld() {
+func (c *TaskHolder) cleanHistory() {
 	ossClient := c.oss
-	c.sendMessage("cleanOld start")
+	c.sendMessage("clean history start")
 	defer func() {
-		c.sendMessage("cleanOld done")
+		c.sendMessage("clean history done")
 	}()
 
 	var objects []oss.ObjectProperties
@@ -131,23 +124,28 @@ func (c *TaskHolder) cleanOld() {
 		keys = append(keys, k.Key)
 	}
 	deleteObjects, err := ossClient.GetSlowClient().DeleteObjects(keys)
-	c.sendMessage(fmt.Sprintf("delete result %v, err %v", deleteObjects, err))
+	if err != nil {
+		c.sendMessage(fmt.Sprintf("delete has err: %v", err))
+	} else {
+		c.sendMessage(fmt.Sprintf("delete success, deleteObjects is %v", deleteObjects))
+	}
 }
 
 func (c *TaskHolder) backup() {
 	conf := c.conf
-	c.sendMessage(fmt.Sprintf(`%s目录：备份开始`, conf.BackPath))
-
 	path := conf.BackPath
-	ossClient := c.oss
+
+	c.sendMessage(fmt.Sprintf(`backup【%s】start`, path))
+	defer func() {
+		c.sendMessage(fmt.Sprintf(`backup【%s】done`, path))
+	}()
 
 	if conf.BeforeCmd != "" {
-		// 执行系统命令
-		c.sendMessage(fmt.Sprintf("exec before command %s", conf.BeforeCmd))
+		c.sendMessage(fmt.Sprintf("exec before command: 【%s】", conf.BeforeCmd))
 		cmd := exec.Command("sh", "-c", conf.BeforeCmd)
 		err := cmd.Run()
 		if err != nil {
-			c.sendMessage(fmt.Sprintf("exec before command %s error %v", conf.BeforeCmd, err))
+			c.sendMessage(fmt.Sprintf("exec before command【%s】has error【%s】", conf.BeforeCmd, err))
 			return
 		}
 	}
@@ -156,20 +154,21 @@ func (c *TaskHolder) backup() {
 	if err != nil {
 		panic(err)
 	}
-	c.sendMessage(fmt.Sprintf("zip path %s to %s done", path, zipFile))
+	c.sendMessage(fmt.Sprintf("zip path【%s】to【%s】done", path, zipFile))
 	defer os.Remove(zipFile)
 
 	if conf.AfterCmd != "" {
-		// 执行系统命令
-		c.sendMessage(fmt.Sprintf("exec after command %s", conf.AfterCmd))
+		c.sendMessage(fmt.Sprintf("exec after command: 【%s】", conf.AfterCmd))
 		cmd := exec.Command("sh", "-c", conf.AfterCmd)
 		err := cmd.Run()
 		if err != nil {
-			c.sendMessage(fmt.Sprintf("exec after command %s error %v", conf.AfterCmd, err))
+			c.sendMessage(fmt.Sprintf("exec after command【%s】has error【%s】", conf.AfterCmd, err))
+			return
 		}
 	}
 
 	objKey := filepath.Base(zipFile)
+	ossClient := c.oss
 	err = ossClient.Upload(objKey, zipFile, func(message string) {
 		c.sendMessage(message)
 	})
@@ -178,14 +177,10 @@ func (c *TaskHolder) backup() {
 	}
 
 	if ossClient.HasCoolDownError(err) {
-		c.sendMessage(fmt.Sprintf("obj %s upload not success, because of cool down", objKey))
+		c.sendMessage(fmt.Sprintf("obj【%s】upload not success, because of cool down", objKey))
 	} else {
-		c.sendMessage(fmt.Sprintf("obj %s upload done", objKey))
-		// url, err := ossClient.TempVisitLink(objKey)
-		// c.sendMessage(fmt.Sprintf("obj temp url: %s, error: %v", url, err))
+		c.sendMessage(fmt.Sprintf("obj【%s】upload done", objKey))
 	}
-
-	c.sendMessageExt(fmt.Sprintf(`%s目录：备份结束`, path), true)
 }
 
 func (c *TaskHolder) sendMessage(message string) {
@@ -193,9 +188,8 @@ func (c *TaskHolder) sendMessage(message string) {
 }
 
 func (c *TaskHolder) sendMessageExt(message string, over bool) {
-	msg := fmt.Sprintf("【备份服务(%s)通知】%s", c.ID, message)
-	log.Println(msg)
-	resp, err := c.noticeHandle.SendMessage(msg, over)
+	log.Println(message)
+	resp, err := c.noticeHandle.SendMessage(message, over)
 	if err != nil {
 		log.Printf("sendNotice resp %s, error %v", resp, err)
 	}

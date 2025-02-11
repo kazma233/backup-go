@@ -16,7 +16,6 @@ const (
 
 type Noticeable interface {
 	Type() MessageType
-	SendMessageNow(content string) (string, error)
 	AddMessage(content string)
 	SendAddedMessage() (string, error)
 }
@@ -46,13 +45,13 @@ func (n *Notice) SendMessage(content string, over bool) (string, error) {
 	for _, noticeable := range n.noticeHandle {
 		switch noticeable.Type() {
 		case EMAIL:
-			if over {
-				noticeable.AddMessage(content)
-				return noticeable.SendAddedMessage()
-			}
 			noticeable.AddMessage(content)
 		case TG:
-			return noticeable.SendMessageNow(content)
+			noticeable.AddMessage(content)
+		}
+
+		if over {
+			return noticeable.SendAddedMessage()
 		}
 	}
 

@@ -22,7 +22,7 @@ type (
 		BackPath   string `yaml:"back_path"`
 		AfterCmd   string `yaml:"after_command"`
 		BackupTask string `yaml:"backup_task"`
-		Liveness   string `yaml:"liveness"`
+		// Liveness   string `yaml:"liveness"`
 	}
 
 	OssConfig struct {

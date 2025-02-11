@@ -55,7 +55,6 @@ func (oc *OssClient) Upload(objKey, filePath string, noticeFunc UploadNoticeFunc
 		return errors.New("client not init")
 	}
 
-	noticeFunc("use slow bucket")
 	err = oc.upload(oc.slowBucket, objKey, filePath, noticeFunc)
 	if err == nil {
 		return
