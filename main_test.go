@@ -3,23 +3,11 @@ package main
 import (
 	"backup-go/config"
 	"fmt"
-	"log"
 	"testing"
 )
 
 func before() {
 	config.InitConfig()
-}
-
-func Test_zipPath(t *testing.T) {
-	before()
-
-	path, err := zipPath(`/Users/fanggeek/Projects/cayenne`, "test")
-	if err != nil {
-		panic(err)
-	}
-
-	log.Printf("path %s", path)
 }
 
 func Test_backup(t *testing.T) {
@@ -29,14 +17,15 @@ func Test_backup(t *testing.T) {
 		BackPath: "E:/audio/asmr",
 	})
 
-	c.sendMessage(fmt.Sprintf("【%s】backupTask start", c.ID))
+	c.addMessage(fmt.Sprintf("【%s】backupTask start", c.ID))
 
 	defer func() {
 		if anyData := recover(); anyData != nil {
-			c.sendMessageExt(fmt.Sprintf("【%s】backupTask has panic %v", c.ID, anyData), true)
+			c.addMessage(fmt.Sprintf("【%s】backupTask has panic %v", c.ID, anyData))
 		} else {
-			c.sendMessageExt(fmt.Sprintf("【%s】backupTask finish", c.ID), true)
+			c.addMessage(fmt.Sprintf("【%s】backupTask finish", c.ID))
 		}
+		c.sendMessage()
 	}()
 
 	c.backup()

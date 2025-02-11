@@ -3,6 +3,7 @@ package main
 import (
 	"backup-go/config"
 	"backup-go/notice"
+	"backup-go/utils"
 	"fmt"
 	"log"
 	"net/http"
@@ -56,7 +57,7 @@ func main() {
 			panic(err)
 		}
 
-		fmt.Printf("task %v add success", taskId)
+		log.Printf("task %v add success", taskId)
 	}
 
 	c.Start()
@@ -64,7 +65,7 @@ func main() {
 	http.HandleFunc("/", func(resp http.ResponseWriter, req *http.Request) {
 		id := req.URL.Query().Get("id")
 		dh := defaultHolder(id, config.Config.BackupConf[id])
-		fmt.Printf("backup task %v", dh)
+		log.Printf("backup task %v", dh)
 
 		dh.backupTask()
 	})
@@ -72,14 +73,15 @@ func main() {
 }
 
 func (c *TaskHolder) backupTask() {
-	c.sendMessage(fmt.Sprintf("【%s】backupTask start", c.ID))
+	c.addMessage(fmt.Sprintf("【%s】backupTask start", c.ID))
 
 	defer func() {
 		if anyData := recover(); anyData != nil {
-			c.sendMessageExt(fmt.Sprintf("【%s】backupTask has panic %v", c.ID, anyData), true)
+			c.addMessage(fmt.Sprintf("【%s】backupTask has panic %v", c.ID, anyData))
 		} else {
-			c.sendMessageExt(fmt.Sprintf("【%s】backupTask finish", c.ID), true)
+			c.addMessage(fmt.Sprintf("【%s】backupTask finish", c.ID))
 		}
+		c.sendMessage()
 	}()
 
 	c.backup()
@@ -88,9 +90,9 @@ func (c *TaskHolder) backupTask() {
 
 func (c *TaskHolder) cleanHistory() {
 	ossClient := c.oss
-	c.sendMessage("clean history start")
+	c.addMessage("clean history start")
 	defer func() {
-		c.sendMessage("clean history done")
+		c.addMessage("clean history done")
 	}()
 
 	var objects []oss.ObjectProperties
@@ -115,7 +117,7 @@ func (c *TaskHolder) cleanHistory() {
 	}
 
 	if objects == nil || len(objects) <= 0 {
-		c.sendMessage("no need delete")
+		c.addMessage("no need delete")
 		return
 	}
 
@@ -125,9 +127,9 @@ func (c *TaskHolder) cleanHistory() {
 	}
 	deleteObjects, err := ossClient.GetSlowClient().DeleteObjects(keys)
 	if err != nil {
-		c.sendMessage(fmt.Sprintf("delete has err: %v", err))
+		c.addMessage(fmt.Sprintf("delete has err: %v", err))
 	} else {
-		c.sendMessage(fmt.Sprintf("delete success, deleteObjects is %v", deleteObjects))
+		c.addMessage(fmt.Sprintf("delete success, deleteObjects is %v", deleteObjects))
 	}
 }
 
@@ -135,34 +137,34 @@ func (c *TaskHolder) backup() {
 	conf := c.conf
 	path := conf.BackPath
 
-	c.sendMessage(fmt.Sprintf(`backup【%s】start`, path))
+	c.addMessage(fmt.Sprintf(`backup【%s】start`, path))
 	defer func() {
-		c.sendMessage(fmt.Sprintf(`backup【%s】done`, path))
+		c.addMessage(fmt.Sprintf(`backup【%s】done`, path))
 	}()
 
 	if conf.BeforeCmd != "" {
-		c.sendMessage(fmt.Sprintf("exec before command: 【%s】", conf.BeforeCmd))
+		c.addMessage(fmt.Sprintf("exec before command: 【%s】", conf.BeforeCmd))
 		cmd := exec.Command("sh", "-c", conf.BeforeCmd)
 		err := cmd.Run()
 		if err != nil {
-			c.sendMessage(fmt.Sprintf("exec before command【%s】has error【%s】", conf.BeforeCmd, err))
+			c.addMessage(fmt.Sprintf("exec before command【%s】has error【%s】", conf.BeforeCmd, err))
 			return
 		}
 	}
 
-	zipFile, err := zipPath(path, c.ID)
+	zipFile, err := utils.ZipPath(path, GetFileName(c.ID))
 	if err != nil {
 		panic(err)
 	}
-	c.sendMessage(fmt.Sprintf("zip path【%s】to【%s】done", path, zipFile))
+	c.addMessage(fmt.Sprintf("zip path【%s】to【%s】done", path, zipFile))
 	defer os.Remove(zipFile)
 
 	if conf.AfterCmd != "" {
-		c.sendMessage(fmt.Sprintf("exec after command: 【%s】", conf.AfterCmd))
+		c.addMessage(fmt.Sprintf("exec after command: 【%s】", conf.AfterCmd))
 		cmd := exec.Command("sh", "-c", conf.AfterCmd)
 		err := cmd.Run()
 		if err != nil {
-			c.sendMessage(fmt.Sprintf("exec after command【%s】has error【%s】", conf.AfterCmd, err))
+			c.addMessage(fmt.Sprintf("exec after command【%s】has error【%s】", conf.AfterCmd, err))
 			return
 		}
 	}
@@ -170,27 +172,24 @@ func (c *TaskHolder) backup() {
 	objKey := filepath.Base(zipFile)
 	ossClient := c.oss
 	err = ossClient.Upload(objKey, zipFile, func(message string) {
-		c.sendMessage(message)
+		c.addMessage(message)
 	})
 	if ossClient.HasError(err) {
 		panic(err)
 	}
 
 	if ossClient.HasCoolDownError(err) {
-		c.sendMessage(fmt.Sprintf("obj【%s】upload not success, because of cool down", objKey))
+		c.addMessage(fmt.Sprintf("obj【%s】upload not success, because of cool down", objKey))
 	} else {
-		c.sendMessage(fmt.Sprintf("obj【%s】upload done", objKey))
+		c.addMessage(fmt.Sprintf("obj【%s】upload done", objKey))
 	}
 }
 
-func (c *TaskHolder) sendMessage(message string) {
-	c.sendMessageExt(message, false)
-}
-
-func (c *TaskHolder) sendMessageExt(message string, over bool) {
+func (c *TaskHolder) addMessage(message string) {
 	log.Println(message)
-	resp, err := c.noticeHandle.SendMessage(message, over)
-	if err != nil {
-		log.Printf("sendNotice resp %s, error %v", resp, err)
-	}
+	c.noticeHandle.AddMessage(message, false)
+}
+
+func (c *TaskHolder) sendMessage() {
+	c.noticeHandle.SendMessage()
 }

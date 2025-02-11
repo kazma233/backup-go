@@ -12,6 +12,7 @@ func TestFileNameProcessor_Generate(t *testing.T) {
 
 func TestNeedDeleteFile(t *testing.T) {
 	out := NewProcessor().Generate("test_cc_s", time.Now().AddDate(0, 0, -9))
+	t.Logf("Generate %v", out)
 	res := NeedDeleteFile("test_cc_s", out)
-	t.Logf("result %v", res)
+	t.Logf("NeedDeleteFile %v", res)
 }

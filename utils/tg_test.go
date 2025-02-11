@@ -1,4 +1,4 @@
-package notice
+package utils
 
 import (
 	"backup-go/config"
@@ -6,7 +6,9 @@ import (
 )
 
 func TestSendMessage(t *testing.T) {
+	config.InitConfig()
+
 	tgBot := NewTgBot(config.Config.TG.Key)
-	resp, err := tgBot.SendMessage(config.Config.TgChatId, "new")
+	resp, err := tgBot.SendMessage(config.Config.TgChatId, "test")
 	t.Errorf("resp %v, err %v", resp, err)
 }
