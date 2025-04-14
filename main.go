@@ -16,10 +16,10 @@ import (
 )
 
 type TaskHolder struct {
-	ID           string
-	conf         config.BackupConfig
-	oss          *OssClient
-	noticeHandle *notice.Notice
+	ID            string
+	conf          config.BackupConfig
+	oss           *OssClient
+	noticeManager *notice.NoticeManager
 }
 
 func defaultHolder(id string, conf config.BackupConfig) *TaskHolder {
@@ -27,11 +27,22 @@ func defaultHolder(id string, conf config.BackupConfig) *TaskHolder {
 		panic("id or back_path can not be empty")
 	}
 
+	nm := notice.NewNoticeManager()
+	if config.Config.TG != nil {
+		tgBot := utils.NewTgBot(config.Config.TG.Key)
+		nm.AddNotifier(notice.NewTGNotifier(&tgBot, config.Config.TgChatId))
+	}
+	if config.Config.Mail != nil {
+		mailConfig := config.Config.Mail
+		ms := utils.NewMailSender(mailConfig.Smtp, mailConfig.Port, mailConfig.User, mailConfig.Password)
+		nm.AddNotifier(notice.NewMailNotifier(&ms, config.Config.NoticeMail))
+	}
+
 	return &TaskHolder{
-		ID:           id,
-		conf:         conf,
-		oss:          CreateOSSClient(),
-		noticeHandle: notice.InitNotice(),
+		ID:            id,
+		conf:          conf,
+		oss:           CreateOSSClient(config.Config.OSS),
+		noticeManager: nm,
 	}
 }
 
@@ -104,7 +115,7 @@ func (c *TaskHolder) cleanHistory() {
 		}
 
 		for _, object := range resp.Objects {
-			need := NeedDeleteFile(c.ID, object.Key)
+			need := IsNeedDeleteFile(c.ID, object.Key)
 			if need {
 				objects = append(objects, object)
 			}
@@ -116,7 +127,7 @@ func (c *TaskHolder) cleanHistory() {
 		}
 	}
 
-	if objects == nil || len(objects) <= 0 {
+	if len(objects) <= 0 {
 		c.addMessage("no need delete")
 		return
 	}
@@ -152,7 +163,10 @@ func (c *TaskHolder) backup() {
 		}
 	}
 
-	zipFile, err := utils.ZipPath(path, GetFileName(c.ID))
+	zipFile, err := utils.ZipPath(path, GetFileName(c.ID), func(filePath string, processed, total int64, percentage float64) {
+		// c.addMessage(fmt.Sprintf("zip %s: %d/%d (%.2f%%)", filePath, processed, total, percentage))
+		log.Printf("zip %s: %d/%d (%.2f%%)", filePath, processed, total, percentage)
+	})
 	if err != nil {
 		panic(err)
 	}
@@ -187,9 +201,9 @@ func (c *TaskHolder) backup() {
 
 func (c *TaskHolder) addMessage(message string) {
 	log.Println(message)
-	c.noticeHandle.AddMessage(message, false)
+	c.noticeManager.AddMessage2Queue(message)
 }
 
 func (c *TaskHolder) sendMessage() {
-	c.noticeHandle.SendMessage()
+	c.noticeManager.Notice()
 }

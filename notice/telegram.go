@@ -1,22 +1,23 @@
 package notice
 
-import "backup-go/utils"
+import (
+	"backup-go/utils"
+	"log"
+)
 
-type TGNotice struct {
-	tg      *utils.TGBot
-	message *Message
-	to      string
+type TGNotifier struct {
+	tg *utils.TGBot
+	to string
 }
 
-func NewTGExt(tg *utils.TGBot, to string) *TGNotice {
-	return &TGNotice{
-		tg:      tg,
-		message: NewMessage(),
-		to:      to,
+func NewTGNotifier(tg *utils.TGBot, to string) *TGNotifier {
+	return &TGNotifier{
+		tg: tg,
+		to: to,
 	}
 }
 
-func (m *TGNotice) SendMessageNow(content string) (string, error) {
+func (m *TGNotifier) SendMessageNow(content string) (string, error) {
 	resp, err := m.tg.SendMessage(m.to, content)
 	if err != nil {
 		return resp, err
@@ -25,13 +26,19 @@ func (m *TGNotice) SendMessageNow(content string) (string, error) {
 	return "", nil
 }
 
-func (m *TGNotice) AddMessage(content string) {
-	m.message.Add(content)
+func (m *TGNotifier) IsAvailable() bool {
+	return m.tg != nil && m.to != ""
 }
 
-func (m *TGNotice) SendAddedMessage() (string, error) {
-	content := m.message.String("\n")
-	defer m.message.Clean()
+func (m *TGNotifier) GetName() string {
+	return "Telegram"
+}
+func (m *TGNotifier) Send(msg Message) error {
+	resp, err := m.tg.SendMessage(m.to, msg.String("\n"))
+	log.Printf("Telegram response: %s", resp)
+	if err != nil {
+		return err
+	}
 
-	return m.SendMessageNow(content)
+	return nil
 }

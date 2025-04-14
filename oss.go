@@ -28,20 +28,20 @@ type (
 	UploadNoticeFunc func(string)
 )
 
-func CreateOSSClient() *OssClient {
+func CreateOSSClient(config config.OssConfig) *OssClient {
 	ossClient := &OssClient{
 		slowBucket: must(getBucket(
 			"SLOW",
-			config.Config.OSS.Endpoint,
-			config.Config.OSS.AccessKey,
-			config.Config.OSS.AccessKeySecret,
-			config.Config.OSS.BucketName)), // slowBucket must not nil
+			config.Endpoint,
+			config.AccessKey,
+			config.AccessKeySecret,
+			config.BucketName)), // slowBucket must not nil
 		fastBucket: getBucket(
 			"FAST",
-			config.Config.OSS.FastEndpoint,
-			config.Config.OSS.AccessKey,
-			config.Config.OSS.AccessKeySecret,
-			config.Config.OSS.BucketName,
+			config.FastEndpoint,
+			config.AccessKey,
+			config.AccessKeySecret,
+			config.BucketName,
 		),
 	}
 

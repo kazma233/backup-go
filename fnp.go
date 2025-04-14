@@ -21,11 +21,18 @@ type FNParserResult struct {
 	Day    int
 }
 
-func NewProcessor() *FileNameProcessor {
-	return &FileNameProcessor{
+var defaultProcessor *FileNameProcessor
+
+func init() {
+	defaultProcessor = &FileNameProcessor{
 		rg:     regexp.MustCompile(`^([a-zA-Z0-9_]+)_(\d{4})_(\d{2})_(\d{2})`),
 		format: `%s_%d_%02d_%02d`,
 	}
+}
+
+// GetDefaultProcessor returns the singleton instance
+func GetDefaultProcessor() *FileNameProcessor {
+	return defaultProcessor
 }
 
 // Generate 生成包含前缀和日期的字符串
@@ -66,18 +73,22 @@ func (sp *FileNameProcessor) Parse(s string) (*FNParserResult, error) {
 	}, nil
 }
 
-func NeedDeleteFile(prefix, name string) bool {
-	result, err := NewProcessor().Parse(name)
+func (r *FNParserResult) ToTime() time.Time {
+	return time.Date(r.Year, time.Month(r.Month), r.Day, 0, 0, 0, 0, time.UTC)
+}
+
+func IsNeedDeleteFile(prefix, name string) bool {
+	result, err := GetDefaultProcessor().Parse(name)
 	if err != nil || !strings.EqualFold(result.Prefix, prefix) {
 		return false
 	}
 
-	fileDate := time.Date(result.Year, time.Month(result.Month), result.Day, 0, 0, 0, 0, time.UTC)
+	fileDate := result.ToTime()
 	beforeDate := time.Now().AddDate(0, 0, -7)
 
 	return fileDate.Before(beforeDate)
 }
 
 func GetFileName(prefix string) string {
-	return NewProcessor().Generate(prefix, time.Now()) + ".zip"
+	return GetDefaultProcessor().Generate(prefix, time.Now()) + ".zip"
 }
