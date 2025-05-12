@@ -12,23 +12,30 @@ import (
 )
 
 type ProgressCallback func(filePath string, processed int64, total int64, percentage float64)
+type ProgressDoneCallback func(err error)
 
 // ProgressTracker 用于追踪进度
 type ProgressTracker struct {
-	processed   *int64
-	total       int64
-	callback    ProgressCallback
-	currentFile string
-	done        chan bool
+	processed    *int64
+	total        int64
+	callback     ProgressCallback
+	currentFile  string
+	done         chan bool
+	doneCallback ProgressDoneCallback
 }
 
-func NewProgressTracker(total int64, callback ProgressCallback) *ProgressTracker {
+func NewProgressTracker(total int64, callback ProgressCallback, doneCallback ProgressDoneCallback) *ProgressTracker {
+	if callback == nil {
+		panic("callback can not be nil")
+	}
+
 	var processed int64
 	return &ProgressTracker{
-		processed: &processed,
-		total:     total,
-		callback:  callback,
-		done:      make(chan bool),
+		processed:    &processed,
+		total:        total,
+		callback:     callback,
+		done:         make(chan bool),
+		doneCallback: doneCallback,
 	}
 }
 
@@ -38,14 +45,12 @@ func (pt *ProgressTracker) Start() {
 		for {
 			select {
 			case <-ticker.C:
-				if pt.callback != nil {
-					pt.callback(
-						pt.currentFile,
-						atomic.LoadInt64(pt.processed),
-						pt.total,
-						float64(atomic.LoadInt64(pt.processed))/float64(pt.total)*100,
-					)
-				}
+				pt.callback(
+					pt.currentFile,
+					atomic.LoadInt64(pt.processed),
+					pt.total,
+					float64(atomic.LoadInt64(pt.processed))/float64(pt.total)*100,
+				)
 			case <-pt.done:
 				ticker.Stop()
 				return
@@ -74,7 +79,7 @@ func (pr *ProgressReader) Read(p []byte) (int, error) {
 	return n, err
 }
 
-func ZipPath(source string, target string, callback ProgressCallback) (string, error) {
+func ZipPath(source string, target string, callback ProgressCallback, doneCallback ProgressDoneCallback) (string, error) {
 	source = filepath.Clean(source)
 	target = filepath.Clean(target)
 
@@ -116,7 +121,7 @@ func ZipPath(source string, target string, callback ProgressCallback) (string, e
 	}
 
 	// 创建进度追踪器
-	tracker := NewProgressTracker(totalSize, callback)
+	tracker := NewProgressTracker(totalSize, callback, doneCallback)
 	tracker.Start()
 	defer tracker.Stop()
 
@@ -177,8 +182,11 @@ func ZipPath(source string, target string, callback ProgressCallback) (string, e
 	})
 
 	if err != nil {
-		return "", fmt.Errorf("zip failed: %w", err)
+		e := fmt.Errorf("zip failed: %w", err)
+		return "", e
 	}
+
+	doneCallback(nil)
 
 	return target, nil
 }

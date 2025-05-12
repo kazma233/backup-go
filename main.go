@@ -166,11 +166,12 @@ func (c *TaskHolder) backup() {
 	zipFile, err := utils.ZipPath(path, GetFileName(c.ID), func(filePath string, processed, total int64, percentage float64) {
 		c.addMessage(fmt.Sprintf("zip %s: %d/%d (%.2f%%)", filePath, processed, total, percentage))
 		// log.Printf("zip %s: %d/%d (%.2f%%)", filePath, processed, total, percentage)
+	}, func(err error) {
+		c.addMessage(fmt.Sprintf("zip path【%s】done, error: %v", path, err))
 	})
 	if err != nil {
 		panic(err)
 	}
-	c.addMessage(fmt.Sprintf("zip path【%s】to【%s】done", path, zipFile))
 	defer os.Remove(zipFile)
 
 	if conf.AfterCmd != "" {
