@@ -12,7 +12,7 @@ import (
 )
 
 type ProgressCallback func(filePath string, processed int64, total int64, percentage float64)
-type ProgressDoneCallback func(err error)
+type ProgressDoneCallback func(total int64)
 
 // ProgressTracker 用于追踪进度
 type ProgressTracker struct {
@@ -53,6 +53,9 @@ func (pt *ProgressTracker) Start() {
 				)
 			case <-pt.done:
 				ticker.Stop()
+				if pt.doneCallback != nil {
+					pt.doneCallback(pt.total)
+				}
 				return
 			}
 		}
@@ -185,8 +188,6 @@ func ZipPath(source string, target string, callback ProgressCallback, doneCallba
 		e := fmt.Errorf("zip failed: %w", err)
 		return "", e
 	}
-
-	doneCallback(nil)
 
 	return target, nil
 }
