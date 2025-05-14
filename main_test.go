@@ -14,7 +14,7 @@ func Test_backup(t *testing.T) {
 	before()
 
 	c := defaultHolder("test", config.BackupConfig{
-		BackPath: "E:/audio/asmr",
+		BackPath: "E:/audio/z/free",
 	})
 
 	c.addMessage(fmt.Sprintf("【%s】backupTask start", c.ID))

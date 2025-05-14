@@ -37,7 +37,7 @@ func (m *NoticeManager) AddMessage2Queue(msg string) {
 
 func (m *NoticeManager) Notice() {
 	for _, n := range m.notifiers {
-		if n.IsAvailable() {
+		if !n.IsAvailable() {
 			continue
 		}
 
