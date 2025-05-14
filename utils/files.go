@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"sync/atomic"
@@ -85,6 +86,7 @@ func (pr *ProgressReader) Read(p []byte) (int, error) {
 func ZipPath(source string, target string, callback ProgressCallback, doneCallback ProgressDoneCallback) (string, error) {
 	source = filepath.Clean(source)
 	target = filepath.Clean(target)
+	log.Printf("zip path: %s, target: %s", source, target)
 
 	info, err := os.Stat(source)
 	if err != nil {
