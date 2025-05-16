@@ -41,7 +41,7 @@ func NewProgressTracker(total int64, callback ProgressCallback, doneCallback Pro
 }
 
 func (pt *ProgressTracker) Start() {
-	ticker := time.NewTicker(time.Second)
+	ticker := time.NewTicker(30 * time.Second)
 	go func() {
 		for {
 			select {
