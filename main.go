@@ -164,7 +164,7 @@ func (c *TaskHolder) backup() {
 	}
 
 	zipFile, err := utils.ZipPath(path, GetFileName(c.ID), func(filePath string, processed, total int64, percentage float64) {
-		c.addMessage(fmt.Sprintf("zip %s: %d/%d (%.2f%%)", filePath, processed, total, percentage))
+		log.Printf("zip %s: %d/%d (%.2f%%)", filePath, processed, total, percentage)
 	}, func(total int64) {
 		c.addMessage(fmt.Sprintf("zip path【%s】done, total: %d", path, total))
 	})
