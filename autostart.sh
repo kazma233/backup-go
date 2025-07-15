@@ -103,12 +103,16 @@ get_working_dir() {
 # 创建并配置systemd服务（公共逻辑）
 setup_common_service() {
     log_info "开始设置 $APP_NAME 服务..."
-
+    
+    # 创建 systemd 服务目录（如果不存在）
+    SERVICE_DIR="$HOME/.config/systemd/user"
+    mkdir -p "$SERVICE_DIR" || { log_error "无法创建目录: $SERVICE_DIR"; exit 1; }
+    
     # 创建 systemd 服务文件
-    SERVICE_FILE="$HOME/.config/systemd/user/$APP_NAME.service"
-
+    SERVICE_FILE="$SERVICE_DIR/$APP_NAME.service"
+    
     log_info "创建服务文件: $SERVICE_FILE"
-    cat >"$SERVICE_FILE" <<EOF
+    cat > "$SERVICE_FILE" << EOF
 [Unit]
 Description=$APP_NAME 服务
 After=network.target
