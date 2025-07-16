@@ -170,8 +170,8 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart="$APP_PATH"
-WorkingDirectory="$WORKING_DIR"
+ExecStart=$APP_PATH
+WorkingDirectory=$WORKING_DIR
 Restart=always
 RestartSec=5s
 
