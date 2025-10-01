@@ -67,20 +67,12 @@ func (pt *ProgressTracker) Stop() {
 	close(pt.done)
 }
 
-func (pt *ProgressTracker) SetCurrentFile(path string) {
+func (pt *ProgressTracker) UpdateCurrentFile(path string) {
 	pt.currentFile = path
 }
 
-// ProgressReader 包装 io.Reader 以追踪进度
-type ProgressReader struct {
-	io.Reader
-	processed *int64
-}
-
-func (pr *ProgressReader) Read(p []byte) (int, error) {
-	n, err := pr.Reader.Read(p)
-	atomic.AddInt64(pr.processed, int64(n))
-	return n, err
+func (pt *ProgressTracker) IncProcessed(size int) {
+	atomic.AddInt64(pt.processed, int64(size))
 }
 
 func ZipPath(source string, target string, callback ProgressCallback, doneCallback ProgressDoneCallback) (string, error) {
@@ -171,16 +163,29 @@ func ZipPath(source string, target string, callback ProgressCallback, doneCallba
 		}
 		defer file.Close()
 
-		tracker.SetCurrentFile(path)
-		progressReader := &ProgressReader{
-			Reader:    file,
-			processed: tracker.processed,
-		}
+		tracker.UpdateCurrentFile(path)
 
 		buf := make([]byte, 32*1024) // buffer
-		_, err = io.CopyBuffer(writer, progressReader, buf)
-		if err != nil {
-			return fmt.Errorf("copy file failed: %w", err)
+		for {
+			nr, er := file.Read(buf)
+			if nr > 0 {
+				nw, ew := writer.Write(buf[:nr])
+				if nw > 0 {
+					tracker.IncProcessed(nw)
+				}
+				if ew != nil {
+					return fmt.Errorf("write file failed: %w", ew)
+				}
+				if nw != nr {
+					return fmt.Errorf("short write: wrote %d of %d bytes", nw, nr)
+				}
+			}
+			if er == io.EOF {
+				break
+			}
+			if er != nil {
+				return fmt.Errorf("read file failed: %w", er)
+			}
 		}
 
 		return nil
