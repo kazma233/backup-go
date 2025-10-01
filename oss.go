@@ -137,7 +137,7 @@ func isNil[T any](obj T) bool {
 }
 
 func canBeNil(kind reflect.Kind) bool {
-	return kind == reflect.Ptr ||
+	return kind == reflect.Pointer ||
 		kind == reflect.Interface ||
 		kind == reflect.Slice ||
 		kind == reflect.Map ||

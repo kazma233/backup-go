@@ -19,6 +19,8 @@ WORKING_DIR=""
 APP_NAME=""
 # 系统类型
 SYSTEM_TYPE=""
+# 操作类型
+ACTION=""
 
 # 日志函数
 log_info() {
@@ -39,6 +41,28 @@ check_command() {
         log_error "需要 $1 命令，但未找到。请先安装。"
         exit 1
     }
+}
+
+# 检查用户级systemd是否可用
+check_user_systemd() {
+    if ! systemctl --user list-units >/dev/null 2>&1; then
+        log_error "systemd 用户服务不可用。"
+        log_error "在某些系统上，你可能需要先启用用户 lingering: loginctl enable-linger \$(whoami)"
+        exit 1
+    fi
+}
+
+# 检查应用是否已在运行
+check_app_running() {
+    if pgrep -f "$APP_PATH" >/dev/null; then
+        log_warn "检测到应用程序 '$APP_PATH' 已在运行。"
+        log_warn "继续安装服务可能会导致冲突。"
+        read -p "是否继续? (y/N): " -r response
+        if [[ ! "$response" =~ ^[Yy]$ ]]; then
+            log_info "操作已取消。"
+            exit 0
+        fi
+    fi
 }
 
 # 确定系统类型
@@ -104,17 +128,19 @@ get_app_path() {
 
 # 获取工作目录（可选覆盖）
 get_working_dir() {
-    read -p "请输入工作目录 (直接回车使用默认: $WORKING_DIR): " -r WORKING_DIR_TEMP
-    if [ -n "$WORKING_DIR_TEMP" ]; then
-        if [ ! -d "$WORKING_DIR_TEMP" ]; then
-            log_error "目录不存在: $WORKING_DIR_TEMP"
-            # 返回1会导致set -e退出脚本
-            return 1
+    while true; do
+        read -p "请输入工作目录 (直接回车使用默认: $WORKING_DIR): " -r WORKING_DIR_TEMP
+        if [ -z "$WORKING_DIR_TEMP" ]; then
+            # 使用默认值，退出循环
+            break
+        elif [ ! -d "$WORKING_DIR_TEMP" ]; then
+            log_error "目录不存在: $WORKING_DIR_TEMP，请重新输入"
         else
             WORKING_DIR="$WORKING_DIR_TEMP"
             log_info "工作目录已更新为: $WORKING_DIR"
+            break
         fi
-    fi
+    done
 }
 
 # 验证服务名称
@@ -193,7 +219,13 @@ EOF
 
     # 检查服务状态
     log_info "检查 $APP_NAME 服务状态"
-    systemctl --user status "$APP_NAME.service"
+    if systemctl --user is-active --quiet "$APP_NAME.service"; then
+        log_info "$APP_NAME 服务已成功启动并运行。"
+    else
+        log_error "$APP_NAME 服务启动失败，请检查日志："
+        journalctl --user -u "$APP_NAME.service" -n 20 --no-pager
+        exit 1
+    fi
 }
 
 # Ubuntu系统特有的设置
@@ -230,6 +262,7 @@ install_after_info() {
     log_info "  停止: systemctl --user stop '$APP_NAME.service'"
     log_info "  重启: systemctl --user restart '$APP_NAME.service'"
     log_info "  状态: systemctl --user status '$APP_NAME.service'"
+    log_info "  日志: journalctl --user -u '$APP_NAME.service' -f"
 }
 
 # 卸载服务（公共逻辑）
@@ -326,7 +359,8 @@ show_help() {
 parse_args() {
     if [ $# -eq 0 ]; then
         show_help
-        exit 1
+        # 修改：不带参数时显示帮助是正常行为，应以成功状态退出
+        exit 0
     fi
     
     ACTION="$1"
@@ -342,6 +376,7 @@ parse_args() {
     *)
         log_error "未知命令: $ACTION"
         show_help
+        exit 1
         ;;
     esac
 }
@@ -357,10 +392,14 @@ main() {
     install)
         # 确定系统类型
         determine_system
+        # 检查用户级systemd
+        check_user_systemd
         # 检查必要的命令
         check_command systemctl
         # 获取应用路径（会自动设置APP_NAME和WORKING_DIR）
         get_app_path
+        # 检查应用是否已在运行
+        check_app_running
         # 允许用户覆盖自动设置的应用名称
         get_app_name_for_install
         # 允许用户覆盖自动设置的工作目录
@@ -378,6 +417,8 @@ main() {
     uninstall)
         # 确定系统类型
         determine_system
+        # 检查用户级systemd
+        check_user_systemd
         # 检查必要的命令
         check_command systemctl
         # 卸载操作：获取要卸载的服务名称

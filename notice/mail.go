@@ -26,10 +26,8 @@ func (m *MailNotifier) GetName() string {
 	return "Mail"
 }
 
-func (m *MailNotifier) Send(message Message) error {
-	content := message.String("<br/>")
-
-	// 发送邮件
+// Send 发送邮件
+func (m *MailNotifier) Send(content string) error {
 	errs := []error{}
 	for _, to := range m.tos {
 		err := m.mailSender.SendEmail("backup-go", to, "备份消息通知", content)

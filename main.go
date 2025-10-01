@@ -4,7 +4,6 @@ import (
 	"backup-go/config"
 	"backup-go/notice"
 	"backup-go/utils"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -84,38 +83,43 @@ func main() {
 }
 
 func (c *TaskHolder) backupTask() {
-	c.addMessage(fmt.Sprintf("【%s】backupTask start", c.ID))
+	logger := utils.NewTaskLogger(c.ID)
 
-	defer func() {
-		if anyData := recover(); anyData != nil {
-			c.addMessage(fmt.Sprintf("【%s】backupTask has panic %v", c.ID, anyData))
-		} else {
-			c.addMessage(fmt.Sprintf("【%s】backupTask finish", c.ID))
-		}
-		c.sendMessage()
-	}()
+	// 使用 TaskLogger 的装饰器方法
+	logger.ExecuteWithPanic("backupTask", func() {
+		logger.Execute("backup", func() error {
+			c.backupWithLogger(logger)
+			return nil
+		})
 
-	c.backup()
-	c.cleanHistory()
+		logger.Execute("cleanHistory", func() error {
+			c.cleanHistoryWithLogger(logger)
+			return nil
+		})
+	})
+
+	// 在 main.go 中处理消息发送
+	c.sendMessages(logger)
 }
 
 func (c *TaskHolder) cleanHistory() {
+	c.cleanHistoryWithLogger(utils.NewTaskLogger(c.ID))
+}
+
+func (c *TaskHolder) cleanHistoryWithLogger(logger *utils.TaskLogger) {
 	ossClient := c.oss
-	c.addMessage("clean history start")
-	defer func() {
-		c.addMessage("clean history done")
-	}()
 
 	var objects []oss.ObjectProperties
 	token := ""
 	for {
 		resp, err := ossClient.GetSlowClient().ListObjectsV2(oss.MaxKeys(100), oss.ContinuationToken(token))
 		if err != nil {
+			logger.Log("列出对象失败: %v", err)
 			break
 		}
 
 		for _, object := range resp.Objects {
-			need := IsNeedDeleteFile(c.ID, object.Key)
+			need := utils.IsNeedDeleteFile(c.ID, object.Key)
 			if need {
 				objects = append(objects, object)
 			}
@@ -128,7 +132,7 @@ func (c *TaskHolder) cleanHistory() {
 	}
 
 	if len(objects) <= 0 {
-		c.addMessage("no need delete")
+		logger.Log("无需删除文件")
 		return
 	}
 
@@ -136,74 +140,79 @@ func (c *TaskHolder) cleanHistory() {
 	for _, k := range objects {
 		keys = append(keys, k.Key)
 	}
+
+	logger.Log("找到 %d 个文件需要删除", len(keys))
 	deleteObjects, err := ossClient.GetSlowClient().DeleteObjects(keys)
 	if err != nil {
-		c.addMessage(fmt.Sprintf("delete has err: %v", err))
+		logger.Log("删除失败: %v", err)
 	} else {
-		c.addMessage(fmt.Sprintf("delete success, deleteObjects is %v", deleteObjects))
+		logger.Log("成功删除 %d 个对象", len(deleteObjects.DeletedObjects))
 	}
 }
 
-func (c *TaskHolder) backup() {
+func (c *TaskHolder) backupWithLogger(logger *utils.TaskLogger) {
 	conf := c.conf
 	path := conf.BackPath
 
-	c.addMessage(fmt.Sprintf(`backup【%s】start`, path))
-	defer func() {
-		c.addMessage(fmt.Sprintf(`backup【%s】done`, path))
-	}()
+	logger.Log("开始备份, 备份path: %s", path)
 
+	// 执行前置命令
 	if conf.BeforeCmd != "" {
-		c.addMessage(fmt.Sprintf("exec before command: 【%s】", conf.BeforeCmd))
+		logger.Log("执行前置命令: %s", conf.BeforeCmd)
 		cmd := exec.Command("sh", "-c", conf.BeforeCmd)
-		err := cmd.Run()
-		if err != nil {
-			c.addMessage(fmt.Sprintf("exec before command【%s】has error【%s】", conf.BeforeCmd, err))
+		if err := cmd.Run(); err != nil {
+			logger.Log("前置命令执行失败: %v", err)
 			return
 		}
+		logger.Log("前置命令执行完成")
 	}
 
-	zipFile, err := utils.ZipPath(path, GetFileName(c.ID), func(filePath string, processed, total int64, percentage float64) {
-		log.Printf("zip %s: %d/%d (%.2f%%)", filePath, processed, total, percentage)
+	// 压缩文件
+	zipFile, err := utils.ZipPath(path, utils.GetFileName(c.ID), func(filePath string, processed, total int64, percentage float64) {
+		logger.Log("zip %s: %d/%d (%.2f%%)", filePath, processed, total, percentage)
 	}, func(total int64) {
-		c.addMessage(fmt.Sprintf("zip path【%s】done, total: %d", path, total))
+		logger.Log("压缩完成，总大小: %d 字节", total)
 	})
 	if err != nil {
+		logger.Log("压缩失败: %v", err)
 		panic(err)
 	}
 	defer os.Remove(zipFile)
 
+	// 执行后置命令
 	if conf.AfterCmd != "" {
-		c.addMessage(fmt.Sprintf("exec after command: 【%s】", conf.AfterCmd))
+		logger.Log("执行后置命令: %s", conf.AfterCmd)
 		cmd := exec.Command("sh", "-c", conf.AfterCmd)
-		err := cmd.Run()
-		if err != nil {
-			c.addMessage(fmt.Sprintf("exec after command【%s】has error【%s】", conf.AfterCmd, err))
+		if err := cmd.Run(); err != nil {
+			logger.Log("后置命令执行失败: %v", err)
 			return
 		}
+		logger.Log("后置命令执行完成")
 	}
 
+	// 上传到OSS
 	objKey := filepath.Base(zipFile)
 	ossClient := c.oss
+	logger.Log("上传到OSS: %s", objKey)
+
 	err = ossClient.Upload(objKey, zipFile, func(message string) {
-		c.addMessage(message)
+		logger.Log("上传进度: %s", message)
 	})
+
 	if ossClient.HasError(err) {
+		logger.Log("上传失败: %v", err)
 		panic(err)
 	}
 
 	if ossClient.HasCoolDownError(err) {
-		c.addMessage(fmt.Sprintf("obj【%s】upload not success, because of cool down", objKey))
+		logger.Log("上传因冷却期延迟: %s", objKey)
 	} else {
-		c.addMessage(fmt.Sprintf("obj【%s】upload done", objKey))
+		logger.Log("上传完成: %s", objKey)
 	}
 }
 
-func (c *TaskHolder) addMessage(message string) {
-	log.Println(message)
-	c.noticeManager.AddMessage2Queue(message)
-}
-
-func (c *TaskHolder) sendMessage() {
-	c.noticeManager.Notice()
+// sendMessages 发送 TaskLogger 收集的所有消息
+func (c *TaskHolder) sendMessages(logger *utils.TaskLogger) {
+	message := logger.GetMessageAndClean()
+	c.noticeManager.Notice(message)
 }

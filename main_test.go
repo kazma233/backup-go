@@ -2,7 +2,7 @@ package main
 
 import (
 	"backup-go/config"
-	"fmt"
+	"backup-go/utils"
 	"testing"
 )
 
@@ -14,21 +14,12 @@ func Test_backup(t *testing.T) {
 	before()
 
 	c := defaultHolder("test", config.BackupConfig{
-		BackPath: "E:/audio/z/free",
+		BackPath: "F:/zip_demo",
 	})
 
-	c.addMessage(fmt.Sprintf("【%s】backupTask start", c.ID))
-
-	defer func() {
-		if anyData := recover(); anyData != nil {
-			c.addMessage(fmt.Sprintf("【%s】backupTask has panic %v", c.ID, anyData))
-		} else {
-			c.addMessage(fmt.Sprintf("【%s】backupTask finish", c.ID))
-		}
-		c.sendMessage()
-	}()
-
-	c.backup()
+	logger := utils.NewTaskLogger(c.ID)
+	c.backupWithLogger(logger)
+	c.sendMessages(logger)
 }
 
 func Test_cleanOld(t *testing.T) {

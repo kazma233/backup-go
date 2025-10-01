@@ -33,8 +33,9 @@ func (m *TGNotifier) IsAvailable() bool {
 func (m *TGNotifier) GetName() string {
 	return "Telegram"
 }
-func (m *TGNotifier) Send(msg Message) error {
-	resp, err := m.tg.SendMessage(m.to, msg.String("\n"))
+
+func (m *TGNotifier) Send(msg string) error {
+	resp, err := m.tg.SendMessage(m.to, msg)
 	log.Printf("Telegram response: %s", resp)
 	if err != nil {
 		return err
