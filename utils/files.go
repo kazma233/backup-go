@@ -54,9 +54,6 @@ func (pt *ProgressTracker) Start() {
 				)
 			case <-pt.done:
 				ticker.Stop()
-				if pt.doneCallback != nil {
-					pt.doneCallback(pt.total)
-				}
 				return
 			}
 		}
@@ -65,6 +62,10 @@ func (pt *ProgressTracker) Start() {
 
 func (pt *ProgressTracker) Stop() {
 	close(pt.done)
+
+	if pt.doneCallback != nil {
+		pt.doneCallback(pt.total)
+	}
 }
 
 func (pt *ProgressTracker) UpdateCurrentFile(path string) {

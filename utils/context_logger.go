@@ -3,6 +3,7 @@ package utils
 import (
 	"fmt"
 	"log"
+	"sort"
 	"strings"
 	"time"
 )
@@ -23,9 +24,14 @@ func (m *Message) String(sep string) string {
 		return ""
 	}
 
+	// 按时间戳排序消息，确保消息按正确顺序显示
+	sort.Slice(m.body, func(i, j int) bool {
+		return m.body[i].Date.Before(m.body[j].Date)
+	})
+
 	result := []string{}
-	for _, m := range m.body {
-		result = append(result, fmt.Sprintf("%s: %s", m.Date.Format("2006-01-02 15:04:05"), m.Content))
+	for _, msg := range m.body {
+		result = append(result, fmt.Sprintf("%s: %s", msg.Date.Format("2006-01-02 15:04:05"), msg.Content))
 	}
 
 	return strings.Join(result, sep)
