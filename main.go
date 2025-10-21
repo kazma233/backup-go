@@ -146,7 +146,7 @@ func (c *TaskHolder) cleanHistoryWithLogger(logger *utils.TaskLogger) {
 	if err != nil {
 		logger.Log("删除失败: %v", err)
 	} else {
-		logger.Log("成功删除 %d 个对象", len(deleteObjects.DeletedObjects))
+		logger.Log("成功删除：%v", deleteObjects.DeletedObjects)
 	}
 }
 
