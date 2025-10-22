@@ -1,7 +1,7 @@
 DB_CONTAINER="your_container_name"; \
 DB_NAME="your_database_name"; \
-MONGO_USER="admin"; \
-MONGO_PASS="pass"; \
+MONGO_USER=""; \
+MONGO_PASS=""; \
 MONGO_AUTH_DB="admin"; \
 HOST_BACKUP_DIR="mongo_dump"; \
 CONTAINER_DUMP_DIR="/tmp/db_dump"; \
@@ -9,12 +9,18 @@ CONTAINER_DUMP_DIR="/tmp/db_dump"; \
 mkdir -p "${HOST_BACKUP_DIR}" && \
 \
 # 1. 在容器内执行 mongodump，生成到 /tmp/db_dump
-docker exec "${DB_CONTAINER}" mongodump \
-    --authenticationDatabase="${MONGO_AUTH_DB}" \
-    --db="${DB_NAME}" \
-    --username="${MONGO_USER}" \
-    --password="${MONGO_PASS}" \
-    --out="${CONTAINER_DUMP_DIR}" && \
+if [ -z "${MONGO_USER}" ]; then \
+    docker exec "${DB_CONTAINER}" mongodump \
+        --db="${DB_NAME}" \
+        --out="${CONTAINER_DUMP_DIR}"; \
+else \
+    docker exec "${DB_CONTAINER}" mongodump \
+        --authenticationDatabase="${MONGO_AUTH_DB}" \
+        --db="${DB_NAME}" \
+        --username="${MONGO_USER}" \
+        --password="${MONGO_PASS}" \
+        --out="${CONTAINER_DUMP_DIR}"; \
+fi && \
 \
 # 2. 将容器内的备份文件拷贝到宿主机
 docker cp "${DB_CONTAINER}:${CONTAINER_DUMP_DIR}" "${HOST_BACKUP_DIR}" && \
