@@ -1,2 +1,5 @@
 config/config.yml
 .idea
+.kiro
+backup-go
+app

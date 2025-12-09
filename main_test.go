@@ -14,7 +14,7 @@ func Test_backup(t *testing.T) {
 	before()
 
 	c := defaultHolder("test", config.BackupConfig{
-		BackPath: "F:/zip_demo",
+		BackPath: "~/Downloads/MapleMonoNormalNL-TTF",
 	})
 
 	logger := utils.NewTaskLogger(c.ID)

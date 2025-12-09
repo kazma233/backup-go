@@ -6,7 +6,7 @@ config example (at: config/config.yml):
 ``` yml
 mail:
   smtp: 'smtp'
-  port: 'port'
+  port: 456
   user: 'user'
   password: 'password'
 notice_mail: 
@@ -17,7 +17,7 @@ tg_chat_id: '@tg_chat_id'
 
 # must
 oss:
-  bucket_name: 'bucket_name'
+  bucket_name: 'bucket'
   endpoint: 'endpoint'
   fast_endpoint: 'fast_endpoint'
   access_key: 'access_key'
