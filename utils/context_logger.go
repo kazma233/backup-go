@@ -52,6 +52,47 @@ func (m *Message) Len() int {
 	return len(m.body)
 }
 
+// === LogEntry ===
+
+// LogEntryType 定义日志条目的类型
+type LogEntryType string
+
+const (
+	LogEntryTypeStep     LogEntryType = "step"     // 步骤开始/结束
+	LogEntryTypeProgress LogEntryType = "progress" // 进度信息
+	LogEntryTypeInfo     LogEntryType = "info"     // 一般信息
+	LogEntryTypeError    LogEntryType = "error"    // 错误信息
+)
+
+// StepStatus 定义步骤的状态
+type StepStatus string
+
+const (
+	StepStatusStart   StepStatus = "start"
+	StepStatusSuccess StepStatus = "success"
+	StepStatusFailed  StepStatus = "failed"
+)
+
+// LogEntry 结构化的日志条目
+type LogEntry struct {
+	Type      LogEntryType
+	Timestamp time.Time
+	Message   string
+
+	// 步骤相关字段
+	StepName   string
+	StepStatus StepStatus
+
+	// 进度相关字段
+	FilePath   string
+	Processed  int64
+	Total      int64
+	Percentage float64
+
+	// 错误相关字段
+	Error error
+}
+
 // === TaskLogger ===
 
 // TaskLogger 简化的任务日志记录器，只负责消息收集
@@ -76,44 +117,11 @@ func NewTaskLogger(taskID string) *TaskLogger {
 	}
 }
 
-// Log 记录消息（保持向后兼容，内部转换为 LogInfo）
-func (tl *TaskLogger) Log(format string, args ...interface{}) {
-	tl.LogInfo(format, args...)
-}
-
-// Execute 执行函数并自动处理错误
-func (tl *TaskLogger) Execute(stepName string, fn func() error) error {
-	tl.Log("【%s】%s 开始", tl.taskID, stepName)
-
-	if err := fn(); err != nil {
-		tl.Log("【%s】%s 失败: %v", tl.taskID, stepName, err)
-		return err
-	}
-
-	tl.Log("【%s】%s 完成", tl.taskID, stepName)
-	return nil
-}
-
-// ExecuteWithPanic 执行函数并自动处理 panic
-func (tl *TaskLogger) ExecuteWithPanic(stepName string, fn func()) {
-	tl.Log("【%s】%s 开始", tl.taskID, stepName)
-
-	defer func() {
-		if r := recover(); r != nil {
-			tl.Log("【%s】%s 异常: %v", tl.taskID, stepName, r)
-		} else {
-			tl.Log("【%s】%s 完成", tl.taskID, stepName)
-		}
-	}()
-
-	fn()
-}
-
 // GetMessages 获取所有收集的消息
 func (tl *TaskLogger) GetMessageAndClean() string {
 	// 添加任务总结
 	duration := time.Since(tl.startTime)
-	tl.Log("【%s】任务总耗时: %v", tl.taskID, duration)
+	tl.LogInfo("【%s】任务总耗时: %v", tl.taskID, duration)
 
 	result := tl.message.String("\n")
 	tl.message.Clean()
@@ -121,69 +129,6 @@ func (tl *TaskLogger) GetMessageAndClean() string {
 }
 
 // === 结构化日志方法 ===
-
-// StepStart 记录步骤开始并入栈
-func (tl *TaskLogger) StepStart(stepName string) {
-	tl.stepStack = append(tl.stepStack, stepName)
-	entry := LogEntry{
-		Type:       LogEntryTypeStep,
-		Timestamp:  time.Now(),
-		StepName:   stepName,
-		StepStatus: StepStatusStart,
-		Message:    fmt.Sprintf("开始: %s", stepName),
-	}
-	tl.entries = append(tl.entries, entry)
-
-	// 保持向后兼容，同时记录到旧的消息系统
-	message := fmt.Sprintf("【%s】%s 开始", tl.taskID, stepName)
-	tl.message.Add(message)
-	log.Println(message)
-}
-
-// StepSuccess 记录步骤成功并出栈
-func (tl *TaskLogger) StepSuccess(stepName string) {
-	// 出栈
-	if len(tl.stepStack) > 0 {
-		tl.stepStack = tl.stepStack[:len(tl.stepStack)-1]
-	}
-
-	entry := LogEntry{
-		Type:       LogEntryTypeStep,
-		Timestamp:  time.Now(),
-		StepName:   stepName,
-		StepStatus: StepStatusSuccess,
-		Message:    fmt.Sprintf("完成: %s", stepName),
-	}
-	tl.entries = append(tl.entries, entry)
-
-	// 保持向后兼容
-	message := fmt.Sprintf("【%s】%s 完成", tl.taskID, stepName)
-	tl.message.Add(message)
-	log.Println(message)
-}
-
-// StepFailed 记录步骤失败并出栈
-func (tl *TaskLogger) StepFailed(stepName string, err error) {
-	// 出栈
-	if len(tl.stepStack) > 0 {
-		tl.stepStack = tl.stepStack[:len(tl.stepStack)-1]
-	}
-
-	entry := LogEntry{
-		Type:       LogEntryTypeStep,
-		Timestamp:  time.Now(),
-		StepName:   stepName,
-		StepStatus: StepStatusFailed,
-		Message:    fmt.Sprintf("失败: %s", stepName),
-		Error:      err,
-	}
-	tl.entries = append(tl.entries, entry)
-
-	// 保持向后兼容
-	message := fmt.Sprintf("【%s】%s 失败: %v", tl.taskID, stepName, err)
-	tl.message.Add(message)
-	log.Println(message)
-}
 
 // LogInfo 记录一般信息
 func (tl *TaskLogger) LogInfo(format string, args ...interface{}) {
@@ -247,26 +192,87 @@ func (tl *TaskLogger) GetStartTime() time.Time {
 	return tl.startTime
 }
 
-// LogStage 执行一个步骤，自动处理开始、成功和失败状态
-// fn 可以返回 error 或者 panic，LogStage 会自动捕获并记录
-func (tl *TaskLogger) LogStage(stepName string, fn func() error) (returnErr error) {
-	tl.StepStart(stepName)
+// ExecuteStep 执行一个步骤，自动处理开始、成功和失败状态
+// fn 可以返回 error 或者 panic，ExecuteStep 会自动捕获 panic 并转换为 error
+func (tl *TaskLogger) ExecuteStep(stepName string, fn func() error) (err error) {
+	tl.stepStart(stepName)
 
 	defer func() {
 		if r := recover(); r != nil {
-			// 捕获 panic
-			panicErr := fmt.Errorf("panic: %v", r)
-			tl.StepFailed(stepName, panicErr)
-			returnErr = panicErr
-		} else if returnErr != nil {
+			// 捕获 panic 并转换为 error
+			err = fmt.Errorf("panic: %v", r)
+			tl.stepFailed(stepName, err)
+		} else if err != nil {
 			// 函数返回了错误
-			tl.StepFailed(stepName, returnErr)
+			tl.stepFailed(stepName, err)
 		} else {
 			// 成功完成
-			tl.StepSuccess(stepName)
+			tl.stepSuccess(stepName)
 		}
 	}()
 
-	returnErr = fn()
-	return returnErr
+	return fn()
+}
+
+// stepStart 记录步骤开始并入栈
+func (tl *TaskLogger) stepStart(stepName string) {
+	tl.stepStack = append(tl.stepStack, stepName)
+	entry := LogEntry{
+		Type:       LogEntryTypeStep,
+		Timestamp:  time.Now(),
+		StepName:   stepName,
+		StepStatus: StepStatusStart,
+		Message:    fmt.Sprintf("开始: %s", stepName),
+	}
+	tl.entries = append(tl.entries, entry)
+
+	// 保持向后兼容，同时记录到旧的消息系统
+	message := fmt.Sprintf("【%s】%s 开始", tl.taskID, stepName)
+	tl.message.Add(message)
+	log.Println(message)
+}
+
+// stepSuccess 记录步骤成功并出栈
+func (tl *TaskLogger) stepSuccess(stepName string) {
+	// 出栈
+	if len(tl.stepStack) > 0 {
+		tl.stepStack = tl.stepStack[:len(tl.stepStack)-1]
+	}
+
+	entry := LogEntry{
+		Type:       LogEntryTypeStep,
+		Timestamp:  time.Now(),
+		StepName:   stepName,
+		StepStatus: StepStatusSuccess,
+		Message:    fmt.Sprintf("完成: %s", stepName),
+	}
+	tl.entries = append(tl.entries, entry)
+
+	// 保持向后兼容
+	message := fmt.Sprintf("【%s】%s 完成", tl.taskID, stepName)
+	tl.message.Add(message)
+	log.Println(message)
+}
+
+// stepFailed 记录步骤失败并出栈
+func (tl *TaskLogger) stepFailed(stepName string, err error) {
+	// 出栈
+	if len(tl.stepStack) > 0 {
+		tl.stepStack = tl.stepStack[:len(tl.stepStack)-1]
+	}
+
+	entry := LogEntry{
+		Type:       LogEntryTypeStep,
+		Timestamp:  time.Now(),
+		StepName:   stepName,
+		StepStatus: StepStatusFailed,
+		Message:    fmt.Sprintf("失败: %s", stepName),
+		Error:      err,
+	}
+	tl.entries = append(tl.entries, entry)
+
+	// 保持向后兼容
+	message := fmt.Sprintf("【%s】%s 失败: %v", tl.taskID, stepName, err)
+	tl.message.Add(message)
+	log.Println(message)
 }

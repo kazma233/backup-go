@@ -17,7 +17,7 @@ import (
 type TaskHolder struct {
 	ID            string
 	conf          config.BackupConfig
-	oss           *OssClient
+	ossClient     *OssClient
 	noticeManager *notice.NoticeManager
 }
 
@@ -40,7 +40,7 @@ func defaultHolder(id string, conf config.BackupConfig) *TaskHolder {
 	return &TaskHolder{
 		ID:            id,
 		conf:          conf,
-		oss:           CreateOSSClient(config.Config.OSS),
+		ossClient:     CreateOSSClient(config.Config.OSS),
 		noticeManager: nm,
 	}
 }
@@ -86,16 +86,17 @@ func (c *TaskHolder) backupTask() {
 	logger := utils.NewTaskLogger(c.ID)
 
 	// 使用 TaskLogger 的装饰器方法
-	logger.ExecuteWithPanic("backupTask", func() {
-		logger.Execute("backup", func() error {
+	logger.ExecuteStep("BackupTask", func() error {
+		logger.ExecuteStep("backup", func() error {
 			c.backupWithLogger(logger)
 			return nil
 		})
 
-		logger.Execute("cleanHistory", func() error {
+		logger.ExecuteStep("cleanHistory", func() error {
 			c.cleanHistoryWithLogger(logger)
 			return nil
 		})
+		return nil
 	})
 
 	// 在 main.go 中处理消息发送
@@ -107,8 +108,8 @@ func (c *TaskHolder) cleanHistory() {
 }
 
 func (c *TaskHolder) cleanHistoryWithLogger(logger *utils.TaskLogger) {
-	logger.LogStage("清理历史文件", func() error {
-		ossClient := c.oss
+	logger.ExecuteStep("清理历史文件", func() error {
+		ossClient := c.ossClient
 
 		var objects []oss.ObjectProperties
 		token := ""
@@ -158,12 +159,12 @@ func (c *TaskHolder) backupWithLogger(logger *utils.TaskLogger) {
 	conf := c.conf
 	path := conf.BackPath
 
-	logger.LogStage("备份", func() error {
+	logger.ExecuteStep("备份", func() error {
 		logger.LogInfo("备份路径: %s", path)
 
 		// 执行前置命令
 		if conf.BeforeCmd != "" {
-			if err := logger.LogStage("执行前置命令", func() error {
+			if err := logger.ExecuteStep("执行前置命令", func() error {
 				logger.LogInfo("命令: %s", conf.BeforeCmd)
 				cmd := exec.Command("sh", "-c", conf.BeforeCmd)
 				if err := cmd.Run(); err != nil {
@@ -178,7 +179,7 @@ func (c *TaskHolder) backupWithLogger(logger *utils.TaskLogger) {
 
 		// 压缩文件
 		var zipFile string
-		if err := logger.LogStage("压缩文件", func() error {
+		if err := logger.ExecuteStep("压缩文件", func() error {
 			var err error
 			zipFile, err = utils.ZipPath(path, utils.GetFileName(c.ID), func(filePath string, processed, total int64, percentage float64) {
 				logger.LogProgress(filePath, processed, total, percentage)
@@ -197,7 +198,7 @@ func (c *TaskHolder) backupWithLogger(logger *utils.TaskLogger) {
 
 		// 执行后置命令
 		if conf.AfterCmd != "" {
-			if err := logger.LogStage("执行后置命令", func() error {
+			if err := logger.ExecuteStep("执行后置命令", func() error {
 				logger.LogInfo("命令: %s", conf.AfterCmd)
 				cmd := exec.Command("sh", "-c", conf.AfterCmd)
 				if err := cmd.Run(); err != nil {
@@ -212,8 +213,8 @@ func (c *TaskHolder) backupWithLogger(logger *utils.TaskLogger) {
 
 		// 上传到OSS
 		objKey := filepath.Base(zipFile)
-		ossClient := c.oss
-		if err := logger.LogStage("上传到OSS", func() error {
+		ossClient := c.ossClient
+		if err := logger.ExecuteStep("上传到OSS", func() error {
 			logger.LogInfo("文件: %s", objKey)
 
 			err := ossClient.Upload(objKey, zipFile, func(message string) {
