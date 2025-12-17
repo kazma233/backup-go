@@ -166,7 +166,7 @@ func (c *TaskHolder) backupWithLogger(logger *utils.TaskLogger) {
 		if conf.BeforeCmd != "" {
 			if err := logger.ExecuteStep("执行前置命令", func() error {
 				logger.LogInfo("命令: %s", conf.BeforeCmd)
-				cmd := exec.Command("sh", "-c", conf.BeforeCmd)
+				cmd := exec.Command("bash", "-c", conf.BeforeCmd)
 				if err := cmd.Run(); err != nil {
 					logger.LogError(err, "前置命令执行失败")
 					return err
@@ -200,7 +200,7 @@ func (c *TaskHolder) backupWithLogger(logger *utils.TaskLogger) {
 		if conf.AfterCmd != "" {
 			if err := logger.ExecuteStep("执行后置命令", func() error {
 				logger.LogInfo("命令: %s", conf.AfterCmd)
-				cmd := exec.Command("sh", "-c", conf.AfterCmd)
+				cmd := exec.Command("bash", "-c", conf.AfterCmd)
 				if err := cmd.Run(); err != nil {
 					logger.LogError(err, "后置命令执行失败")
 					return err
